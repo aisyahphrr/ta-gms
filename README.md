@@ -1,38 +1,96 @@
-# Sistem Monitoring Genset Industri (TA-GMS)
+# Dashboard Demo Genset Monitoring System (GMS) - Sidang Tugas Akhir
 
-Dashboard Monitoring Genset Industri Realtime berbasis web modern untuk pemantauan telemetri sensor analog ADS1115, pengukuran kelistrikan EWIG Modbus RS485, dan modul kalibrasi sinyal arus 4–20mA dengan integrasi mikrokontroler ESP32-S3.
+Dashboard antarmuka web *Single Page Layout* (Read-Only) untuk pemantauan telemetri Genset Industri 3-Fasa berbasis mikrokontroler ESP32-S3 dan platform Mastify Cloud IoT.
 
-## Fitur Utama
+---
 
-1. **Dashboard Monitoring Realtime**
-   - Pemantauan Level Air Tangki (Water Level 0–500 Liter) dengan visualisasi tangki cairan dinamis.
-   - Pemantauan Suhu Mesin & Pelumas (Temperature 0–200 °C) dengan radial gauge presisi.
-   - Kanal Analog ADS1115 A2 (Voltase, Arus mA, Raw ADC 16-bit, Engineering %).
-   - Pengukuran Kelistrikan EWIG Modbus RS485 (Tegangan 3-Fasa V_R, V_S, V_T dan Arus Beban I_R, I_S, I_T).
-   - Penanganan status unavailable untuk register daya, frekuensi, power factor, dan energi.
-   - Grafik tren waktu nyata (*Time-Series Chart*) berbasis HTML5 Canvas dengan ekspor data ke format CSV.
+## 1. Kepatuhan Spesifikasi Teknis (R3 Scope & Detail Scope v1.1)
 
-2. **Modul Kalibrasi Sensor (4–20mA)**
-   - Simulator interaktif kalibrasi arus loop 4–20mA.
-   - Tabel verifikasi 5 titik referensi industri (0%, 25%, 50%, 75%, 100% Span) beserta perhitungan persentase galat (*Measurement Error*).
-   - Konfigurasi nilai resistor shunt (150Ω / 250Ω), zero offset, dan span multiplier.
-   - Manajemen konfigurasi kalibrasi via browser LocalStorage (Simpan, Reset Pabrik, Ekspor JSON, Impor JSON).
+1. **Sifat & Batasan (Read-Only Demo)**:
+   - Dirancang khusus untuk keperluan demo dan sidang Tugas Akhir tanpa fitur login/manajemen akun.
+   - Tanpa tombol kontrol perangkat (pencegahan risiko kontrol berbahaya).
+   - Tanpa ekspor laporan kompleks.
+2. **Arsitektur Maksimal 4 Panel Utama (Single Page)**:
+   - **Panel 01: Status & Nilai Real-Time**: Status `engine_state` (RUNNING/STOPPED), suhu pendingin (`engine_temp_c`), tekanan oli (`oil_press_bar`), persentase beban (`load_pct`), serta konsistensi tegangan 3-fasa (`v_11`, `v_12`, `v_13`).
+   - **Panel 02: Grafik Histori / Timeseries**: Line chart interaktif berbasis *Chart.js* untuk visualisasi tren multi-parameter terhadap waktu.
+   - **Panel 03: Tabel Log Alarm Otomatis**: Menampilkan log peringatan hasil evaluasi *Rule Chain Mastify* dengan 4 tingkatan wajib (`NORMAL`, `WARNING`, `CRITICAL`, `SENSOR_FAULT`).
+   - **Panel 04: Hour Meter & Status Maintenance**: Indikator akumulasi jam kerja mesin (`run_hours`), status servis (`maint_due_h`), dan estimasi konsumsi bahan bakar model SFC (`fuel_est_l`).
+3. **Prinsip Zero Logic in Frontend**:
+   - Kode JavaScript (`app.js`) **tidak melakukan** kalkulasi threshold, increment hour meter, penentuan status alarm, maupun penghitungan konsumsi bahan bakar model SFC.
+   - Frontend bertindak murni sebagai *presentation layer* yang merender data matang dari Firmware C ESP32-S3 dan Rule Chain Mastify.
+4. **Cadangan Data Lokal (Offline Backup untuk Sidang)**:
+   - Dilengkapi *captured dataset* lokal dari pengujian riil genset 3-fasa.
+   - Dilengkapi deteksi otomatis (*auto-fallback*) dan tombol manual beralih ke mode offline jika koneksi Wi-Fi ruang sidang mengalami gangguan.
 
-3. **Device & Connectivity**
-   - Topologi visual alur telemetri hardware-to-cloud.
-   - Spesifikasi perangkat keras ESP32-S3, status Wi-Fi, dan bus industri (I²C & RS485).
-   - Parameter gateway MQTT (Broker, Client ID, Topics QoS 1).
-   - Live incoming telemetry JSON payload preview dengan tombol salin.
-   - Log diagnostik dan riwayat aktivitas sistem dengan fitur uji mandiri dan unduh log.
+---
 
-## Teknologi
-- **Frontend**: HTML5, Vanilla CSS3, Vanilla JavaScript (Tanpa dependensi / framework eksternal).
-- **Tema Visual**: Industrial Cobalt & Deep Slate (High-contrast enterprise SCADA theme).
-- **Kompatibilitas**: ESP32-S3 Telemetry Engine, ADS1115 ADC, EWIG Digital Power Meter.
+## 2. Struktur File Proyek
 
-## Menjalankan Proyek
-Jalankan web server lokal menggunakan Python:
+```text
+ta-gms/
+├── index.html        # Layout Single-Page 4 panel utama semantik
+├── style.css         # Desain visual SCADA industrial cyber-slate responsif
+├── app.js            # Controller frontend (polling REST, Chart.js, zero-logic, offline fallback)
+├── .env.example      # Template konfigurasi variabel lingkungan REST API Mastify
+├── .env              # Konfigurasi aktif lokal (diabaikan oleh git)
+├── .gitignore        # Mencegah file kredensial .env ter-push ke repository
+└── README.md         # Dokumentasi panduan teknis operasional
+```
+
+---
+
+## 3. Konfigurasi Lingkungan (`.env`)
+
+Duplikasi file `.env.example` menjadi `.env` dan sesuaikan parameter berikut:
+
+```env
+# Host endpoint REST API Mastify
+MASTIFY_HOST=https://iot.mastify.com
+
+# Device UUID target pada sistem Mastify
+MASTIFY_DEVICE_ID=d89e2480-7389-11ef-9366-0775d79db145
+
+# JWT Bearer Token otentikasi Mastify
+MASTIFY_JWT_TOKEN=eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.your_actual_token
+
+# Interval polling data telemetri (milidetik)
+POLLING_INTERVAL_MS=3000
+
+# Auto fallback ke cadangan lokal jika API/koneksi terputus
+AUTO_FALLBACK_OFFLINE=true
+```
+
+---
+
+## 4. Cara Menjalankan Proyek
+
+Jalankan web server lokal menggunakan modul HTTP bawaan Python di direktori proyek:
+
 ```bash
 python -m http.server 8000
 ```
-Buka peramban di: `http://localhost:8000`
+
+Buka peramban pada alamat:
+```
+http://localhost:8000
+```
+
+---
+
+## 5. Pemetaan Key Telemetri Mastify REST API
+
+Endpoint penarikan telemetri:
+`GET /api/plugins/telemetry/DEVICE/{deviceId}/values/timeseries?keys=...`
+Header otentikasi: `X-Authorization: Bearer {JWT_TOKEN}`
+
+| Key Telemetri / Alias | Deskripsi Parameter | Satuan / Format |
+|---|---|---|
+| `engine_state` / `status` | Status operasional engine | `RUNNING` / `STOPPED` |
+| `engine_temp_c` / `temperature` | Suhu engine coolant (PT100) | `°C` |
+| `oil_press_bar` / `pressure` | Tekanan oli pelumas | `bar` |
+| `load_pct` | Persentase beban genset | `%` (0 - 100) |
+| `v_11`, `v_12`, `v_13` | Tegangan 3-Fasa (EWIG RS485) | `Volt` |
+| `run_hours` / `hourMeter` | Total akumulasi jam kerja | `Jam` |
+| `maint_due_h` / `maintenanceStatus` | Jam menuju jadwal servis | `Jam` / Status string |
+| `fuel_est_l` / `fuelEstimate` | Estimasi konsumsi BBM (SFC model) | `Liter` |
+| `alarm_level`, `alarm_msg` | Tingkat keparahan & pesan alarm | Rule Chain output |

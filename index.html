@@ -1,1278 +1,455 @@
 <!DOCTYPE html>
 <html lang="id">
+
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>Sistem Monitoring Genset Industri | Soft Blue Serenity</title>
-  <meta name="description" content="Dashboard Monitoring Genset Industri Realtime dengan telemetri sensor analog ADS1115, EWIG Modbus RS485, dan modul kalibrasi 4-20mA berbasis ESP32-S3.">
+  <title>Genset Monitoring System (GMS) | Industrial IoT Dashboard</title>
+  <meta name="description"
+    content="Dashboard Pemantauan Genset Industri 3-Fasa berbasis ESP32-S3 dan Platform Mastify Cloud IoT.">
+
+  <!-- Font Eksternal: Plus Jakarta Sans (UI) & JetBrains Mono (Telemetri Angka) -->
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-  <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500;600&display=swap" rel="stylesheet">
-  <link rel="stylesheet" href="style.css">
+  <link
+    href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;500;600;700&family=Plus+Jakarta+Sans:wght@400;500;600;700;800&display=swap"
+    rel="stylesheet">
+
+  <!-- Chart.js CDN untuk Grafik Histori Timeseries -->
+  <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+
+  <!-- Style Utama SCADA Industrial -->
+  <link rel="stylesheet" href="style.css?v=6">
 </head>
+
 <body>
-  <!-- Header Aplikasi -->
-  <header class="app-header">
-    <div class="header-container">
-      <div class="brand-group">
-        <div class="brand-icon">
-          <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-            <path d="M12 2v4M12 18v4M4.93 4.93l2.83 2.83M16.24 16.24l2.83 2.83M2 12h4M18 12h4M4.93 19.07l2.83-2.83M16.24 7.76l2.83-2.83"/>
+  <!-- =========================================================================
+       HEADER APLIKASI (2 MODE OPERASI BERSIH: LIVE REST API vs OFFLINE MODE)
+       ========================================================================= -->
+  <header class="gms-header">
+    <div class="header-inner">
+      <!-- Brand & Metadata Sidang -->
+      <div class="brand-block">
+        <div class="brand-logo">
+          <svg width="26" height="26" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2"
+            stroke-linecap="round" stroke-linejoin="round">
+            <path d="M13 2L3 14h9l-1 8 10-12h-9l1-8z" />
           </svg>
         </div>
-        <div class="brand-text">
-          <h1 class="brand-title">GENSET MONITORING</h1>
-          <span class="brand-subtitle">Industrial IoT Telemetry System • ESP32-S3</span>
+        <div class="brand-meta">
+          <div class="brand-title-row">
+            <h1 class="brand-title">GENSET MONITORING SYSTEM</h1>
+            <span class="badge-scope">READ-ONLY HMI</span>
+          </div>
+          <p class="brand-subtitle">D4 Teknologi Rekayasa Komputer IPB • FreeRTOS & 4-20 mA Signal Chain</p>
         </div>
       </div>
 
-      <!-- Navigasi 3 Halaman Utama -->
-      <nav class="main-nav" aria-label="Navigasi Utama">
-        <button type="button" class="nav-tab active" data-page="dashboard" id="navDashboard">
-          <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-            <rect x="3" y="3" width="7" height="9" rx="1"/>
-            <rect x="14" y="3" width="7" height="5" rx="1"/>
-            <rect x="14" y="12" width="7" height="9" rx="1"/>
-            <rect x="3" y="16" width="7" height="5" rx="1"/>
-          </svg>
-          <span>Dashboard Monitoring</span>
-        </button>
-
-        <button type="button" class="nav-tab" data-page="calibration" id="navCalibration">
-          <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-            <path d="M21 16V8a2 2 0 0 0-1-1.73l-7-4a2 2 0 0 0-2 0l-7 4A2 2 0 0 0 3 8v8a2 2 0 0 0 1 1.73l7 4a2 2 0 0 0 2 0l7-4A2 2 0 0 0 21 16z"/>
-            <polyline points="3.27 6.96 12 12.01 20.73 6.96"/>
-            <line x1="12" y1="22.08" x2="12" y2="12"/>
-          </svg>
-          <span>Kalibrasi Sensor</span>
-        </button>
-
-        <button type="button" class="nav-tab" data-page="device" id="navDevice">
-          <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-            <rect x="2" y="2" width="20" height="8" rx="2" ry="2"/>
-            <rect x="2" y="14" width="20" height="8" rx="2" ry="2"/>
-            <line x1="6" y1="6" x2="6.01" y2="6"/>
-            <line x1="6" y1="18" x2="6.01" y2="18"/>
-          </svg>
-          <span>Device & Connectivity</span>
-        </button>
-      </nav>
-
-      <!-- Status Kontrol Top-Right -->
-      <div class="header-status">
-        <div class="status-pill demo-mode-pill" id="demoModeBadge" title="Status Sumber Data">
-          <span class="status-dot pulse"></span>
-          <span class="status-text">Simulasi Aktif (Demo)</span>
+      <!-- Kontrol Mode Operasi (2 Mode Eksplisit Tanpa Auto-Fallback) -->
+      <div class="header-controls">
+        <!-- Status Box Mode Operasi -->
+        <div class="connection-status" id="connectionStatusBox">
+          <span class="status-indicator-dot online" id="statusDot"></span>
+          <div class="connection-texts">
+            <span class="conn-label">MODE OPERASI:</span>
+            <span class="conn-value" id="dataSourceText">LIVE REST API (Mastify)</span>
+          </div>
         </div>
-        <div class="clock-display" id="systemClock">00:00:00 WIB</div>
+
+        <!-- Tombol Toggle Mode Operasi Bersih -->
+        <button type="button" class="btn-mode-toggle" id="btnToggleSource"
+          title="Beralih antara Mode Live REST API dan Offline Mode">
+          <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2"
+            stroke-linecap="round" stroke-linejoin="round">
+            <polyline points="23 4 23 10 17 10"></polyline>
+            <polyline points="1 20 1 14 7 14"></polyline>
+            <path d="M3.51 9a9 9 0 0 1 14.85-3.36L23 10M1 14l4.64 4.36A9 9 0 0 0 20.49 15"></path>
+          </svg>
+          <span id="btnSourceText">Beralih ke OFFLINE MODE</span>
+        </button>
+
+        <!-- Waktu & Polling Timestamp -->
+        <div class="header-clock-group">
+          <div class="clock-time" id="realtimeClock">00:00:00 WIB</div>
+          <div class="clock-sync" id="lastSyncLabel">Sinkron: Menghubungkan...</div>
+        </div>
       </div>
     </div>
   </header>
 
-  <!-- Konten Halaman Utama -->
-  <main class="app-main">
+  <!-- =========================================================================
+       MAIN SINGLE PAGE CONTAINER (TEPAT 4 PANEL UTAMA)
+       ========================================================================= -->
+  <main class="dashboard-grid">
 
-    <!-- ========================================================
-         PAGE 1: DASHBOARD MONITORING
-         ======================================================== -->
-    <section class="page-view active" id="page-dashboard">
-      <!-- Banner Ringkasan & Kontrol Simulasi -->
-      <div class="section-topbar">
-        <div class="topbar-info">
-          <h2 class="section-heading">Ringkasan Operasional Genset</h2>
-          <p class="section-desc">Pantauan telemetri real-time sensor level air, suhu oli/mesin, dan parameter kelistrikan EWIG RS485.</p>
+    <!-- =======================================================================
+         PANEL 1: STATUS & NILAI REAL-TIME
+         ======================================================================= -->
+    <section class="panel panel-realtime" id="panel-realtime" aria-labelledby="heading-realtime">
+      <div class="panel-header">
+        <div class="panel-title-group">
+          <div class="panel-badge-num">01</div>
+          <h2 class="panel-title" id="heading-realtime">Status & Nilai Real-Time</h2>
         </div>
-        <div class="topbar-actions">
-          <div class="data-source-badge">
-            <span class="badge-tag tag-simulated">Data Simulasi Lokal</span>
-            <span class="telemetry-time" id="lastTelemetryDash">Diperbarui: Barusan</span>
-          </div>
-          <button type="button" class="btn btn-secondary btn-sm" id="btnToggleSim">
-            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-              <rect x="6" y="4" width="4" height="16"/>
-              <rect x="14" y="4" width="4" height="16"/>
-            </svg>
-            <span id="simBtnText">Jeda Simulasi</span>
-          </button>
-        </div>
+        <span class="panel-meta-tag">Kontrak Telemetri ESP32-S3</span>
       </div>
 
-      <!-- Quick Health Bar (Device Status Overview) -->
-      <div class="system-status-bar">
-        <div class="status-bar-item">
-          <span class="status-indicator online"></span>
-          <div class="status-meta">
-            <span class="meta-label">ESP32-S3 Node</span>
-            <strong class="meta-val">Aktif (240MHz)</strong>
+      <div class="realtime-content">
+        <!-- Hero State: Engine State Card Dinamis (RUNNING, STOPPED, STARTING, STOPPING, FAULT) -->
+        <div class="engine-state-card state-running" id="engineStateCard">
+          <div class="engine-state-header">
+            <span class="state-sub">STATUS OPERASIONAL MESIN</span>
+            <span class="state-beacon-pulse" id="engineBeacon"></span>
           </div>
-        </div>
-        <div class="status-bar-divider"></div>
-        <div class="status-bar-item">
-          <span class="status-indicator online"></span>
-          <div class="status-meta">
-            <span class="meta-label">ADC ADS1115 (I²C)</span>
-            <strong class="meta-val">Siap • 0x48 Normal</strong>
-          </div>
-        </div>
-        <div class="status-bar-divider"></div>
-        <div class="status-bar-item">
-          <span class="status-indicator online"></span>
-          <div class="status-meta">
-            <span class="meta-label">EWIG Meter (RS485)</span>
-            <strong class="meta-val">Polling 9600-8-N-1</strong>
-          </div>
-        </div>
-        <div class="status-bar-divider"></div>
-        <div class="status-bar-item">
-          <span class="status-indicator standby"></span>
-          <div class="status-meta">
-            <span class="meta-label">MQTT Gateway</span>
-            <strong class="meta-val">Siap Integrasi (Standby)</strong>
-          </div>
-        </div>
-      </div>
-
-      <!-- Grid Sensor Fisik Utama: Level Air, Suhu, ADS1115 A2 -->
-      <div class="dashboard-grid primary-sensor-grid">
-        <!-- Kartu 1: Water Level -->
-        <article class="telemetry-card card-water-level">
-          <div class="card-header">
-            <div class="card-title-group">
-              <span class="sensor-badge badge-analog">Sensor Analog 4–20mA</span>
-              <h3 class="card-title">Level Air Tangki (Water Level)</h3>
-            </div>
-            <div class="card-status-badge status-normal" id="waterLevelBadge">Normal</div>
-          </div>
-          <div class="card-body gauge-card-body">
-            <!-- Visualisasi Tangki Air -->
-            <div class="tank-visual-container">
-              <div class="tank-outer">
-                <div class="tank-liquid" id="tankLiquidBar" style="height: 68%;">
-                  <div class="liquid-surface"></div>
-                </div>
-                <div class="tank-markers">
-                  <span>500</span>
-                  <span>375</span>
-                  <span>250</span>
-                  <span>125</span>
-                  <span>0</span>
-                </div>
-              </div>
-            </div>
-            <!-- Nilai Angka & Detail -->
-            <div class="card-value-display">
-              <div class="primary-value">
-                <span class="value-number" id="valWaterLevel">340</span>
-                <span class="value-unit">Liter</span>
-              </div>
-              <div class="sensor-details-list">
-                <div class="detail-row">
-                  <span class="detail-label">Persentase</span>
-                  <span class="detail-value" id="valWaterPercent">68.0%</span>
-                </div>
-                <div class="detail-row">
-                  <span class="detail-label">Arus Loop (A1)</span>
-                  <span class="detail-value" id="valWaterCurrent">14.88 mA</span>
-                </div>
-                <div class="detail-row">
-                  <span class="detail-label">Tegangan Shunt</span>
-                  <span class="detail-value" id="valWaterVoltage">2.23 V</span>
-                </div>
-                <div class="detail-row">
-                  <span class="detail-label">Ambang Aman</span>
-                  <span class="detail-value">Min 100 • Max 480</span>
-                </div>
-              </div>
-            </div>
-          </div>
-          <div class="card-footer">
-            <span class="card-footer-note">Input Pin ADS1115: <strong>A1 (Differential / Shunt 150Ω)</strong></span>
-          </div>
-        </article>
-
-        <!-- Kartu 2: Suhu Mesin & Oli -->
-        <article class="telemetry-card card-temperature">
-          <div class="card-header">
-            <div class="card-title-group">
-              <span class="sensor-badge badge-analog">Sensor Suhu 4–20mA</span>
-              <h3 class="card-title">Suhu Mesin & Pelumas (Temperature)</h3>
-            </div>
-            <div class="card-status-badge status-normal" id="tempBadge">Optimal</div>
-          </div>
-          <div class="card-body temp-card-body">
-            <!-- Visual Arc / Thermometer Ring -->
-            <div class="temp-meter-container">
-              <svg class="temp-arc-svg" viewBox="0 0 160 160">
-                <circle class="arc-bg" cx="80" cy="80" r="65" />
-                <circle class="arc-progress" id="tempArcProgress" cx="80" cy="80" r="65" stroke-dasharray="408" stroke-dashoffset="230" />
+          <div class="engine-state-display">
+            <div class="state-icon" id="engineStateIcon">
+              <svg width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"
+                stroke-linecap="round" stroke-linejoin="round">
+                <circle cx="12" cy="12" r="3"></circle>
+                <path
+                  d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1 0 2.83 2 2 0 0 1-2.83 0l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-2 2 2 2 0 0 1-2-2v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83 0 2 2 0 0 1 0-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1-2-2 2 2 0 0 1 2-2h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 0-2.83 2 2 0 0 1 2.83 0l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 2-2 2 2 0 0 1 2 2v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 0 2 2 0 0 1 0 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 2 2 2 2 0 0 1-2 2h-.09a1.65 1.65 0 0 0-1.51 1z">
+                </path>
               </svg>
-              <div class="temp-meter-inner">
-                <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="#699ECC" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-                  <path d="M14 14.76V3.5a2.5 2.5 0 0 0-5 0v11.26a4.5 4.5 0 1 0 5 0z"/>
-                </svg>
-                <span class="temp-center-val" id="valTempCenter">82.4</span>
-                <span class="temp-center-unit">°C</span>
+            </div>
+            <div class="state-details">
+              <span class="state-text-primary" id="valEngineState">RUNNING</span>
+              <span class="state-note" id="engineStateSub">Mesin Beroperasi Nominal • Menyuplai Beban</span>
+            </div>
+            <div class="engine-aux-meta">
+              <div class="aux-meta-badge">
+                <span class="aux-meta-label">AKI GENSET (VB):</span>
+                <span class="aux-meta-val font-mono" id="valBatteryV">--.- V</span>
+              </div>
+              <div class="aux-meta-badge">
+                <span class="aux-meta-label">FREKUENSI:</span>
+                <span class="aux-meta-val font-mono" id="valFreqHz">--.- Hz</span>
               </div>
             </div>
-            <!-- Nilai Rincian -->
-            <div class="card-value-display">
-              <div class="primary-value">
-                <span class="value-number" id="valTemperature">82.4</span>
-                <span class="value-unit">°C</span>
-              </div>
-              <div class="sensor-details-list">
-                <div class="detail-row">
-                  <span class="detail-label">Rentang Skala</span>
-                  <span class="detail-value">0 – 200 °C</span>
-                </div>
-                <div class="detail-row">
-                  <span class="detail-label">Arus Loop (A0)</span>
-                  <span class="detail-value" id="valTempCurrent">10.59 mA</span>
-                </div>
-                <div class="detail-row">
-                  <span class="detail-label">Tegangan Shunt</span>
-                  <span class="detail-value" id="valTempVoltage">1.59 V</span>
-                </div>
-                <div class="detail-row">
-                  <span class="detail-label">Batas Bahaya</span>
-                  <span class="detail-value">Maksimal 105.0 °C</span>
-                </div>
-              </div>
-            </div>
-          </div>
-          <div class="card-footer">
-            <span class="card-footer-note">Input Pin ADS1115: <strong>A0 (Transmitter Suhu Genset)</strong></span>
-          </div>
-        </article>
-
-        <!-- Kartu 3: ADS1115 A2 Analog Input Monitoring -->
-        <article class="telemetry-card card-ads-a2">
-          <div class="card-header">
-            <div class="card-title-group">
-              <span class="sensor-badge badge-i2c">ADS1115 Analog Channel</span>
-              <h3 class="card-title">Input Analog ADS1115 A2</h3>
-            </div>
-            <div class="card-status-badge status-normal" id="adsA2Badge">Monitoring</div>
-          </div>
-          <div class="card-body a2-card-body">
-            <div class="a2-metric-hero">
-              <div class="hero-sublabel">Tegangan Input A2 (Terkonversi)</div>
-              <div class="hero-val-row">
-                <span class="hero-number" id="valA2Voltage">1.842</span>
-                <span class="hero-unit">V</span>
-              </div>
-            </div>
-            <div class="a2-metrics-grid">
-              <div class="a2-box">
-                <span class="box-lbl">Arus Loop (4–20mA)</span>
-                <span class="box-val" id="valA2Current">12.28 mA</span>
-              </div>
-              <div class="a2-box">
-                <span class="box-lbl">Nilai Mentah ADC (16-bit)</span>
-                <span class="box-val font-mono" id="valA2Raw">14,736 / 32768</span>
-              </div>
-              <div class="a2-box">
-                <span class="box-lbl">Engineering Value (0–100%)</span>
-                <span class="box-val" id="valA2Engineering">51.7 %</span>
-              </div>
-              <div class="a2-box">
-                <span class="box-lbl">LSB Resolution</span>
-                <span class="box-val font-mono">0.125 mV / bit</span>
-              </div>
-            </div>
-          </div>
-          <div class="card-footer">
-            <span class="card-footer-note">Konfigurasi: <strong>PGA ±4.096V • Single-Ended A2-GND</strong></span>
-          </div>
-        </article>
-      </div>
-
-      <!-- Pengukuran Kelistrikan EWIG Modbus RS485 -->
-      <div class="section-subbar">
-        <div class="subbar-title-wrap">
-          <h3 class="subbar-title">Pengukuran Kelistrikan EWIG Digital Power Meter</h3>
-          <span class="subbar-meta">Protokol Modbus RTU RS485 • Slave ID 01 • Polling 1000ms</span>
-        </div>
-      </div>
-
-      <div class="dashboard-grid electrical-grid">
-        <!-- Tegangan 3 Phase -->
-        <article class="telemetry-card card-electrical">
-          <div class="card-header">
-            <h4 class="card-title-sm">Tegangan Fasa-ke-Netral (Phase-Neutral)</h4>
-            <span class="mini-tag">Tersedia (EWIG Modbus)</span>
-          </div>
-          <div class="card-body">
-            <div class="phase-metrics-list">
-              <div class="phase-row">
-                <span class="phase-name phase-r">Fasa R (L1-N)</span>
-                <div class="phase-meter-bar"><div class="fill r-fill" id="barVR" style="width: 95%;"></div></div>
-                <span class="phase-val font-mono" id="valVR">220.4 V</span>
-              </div>
-              <div class="phase-row">
-                <span class="phase-name phase-s">Fasa S (L2-N)</span>
-                <div class="phase-meter-bar"><div class="fill s-fill" id="barVS" style="width: 94.5%;"></div></div>
-                <span class="phase-val font-mono" id="valVS">219.1 V</span>
-              </div>
-              <div class="phase-row">
-                <span class="phase-name phase-t">Fasa T (L3-N)</span>
-                <div class="phase-meter-bar"><div class="fill t-fill" id="barVT" style="width: 95.8%;"></div></div>
-                <span class="phase-val font-mono" id="valVT">221.8 V</span>
-              </div>
-              <div class="phase-row-summary">
-                <span class="sum-label">Rata-rata Tegangan (V_avg):</span>
-                <span class="sum-value font-mono" id="valVAvg">220.4 V</span>
-              </div>
-            </div>
-          </div>
-        </article>
-
-        <!-- Arus 3 Phase -->
-        <article class="telemetry-card card-electrical">
-          <div class="card-header">
-            <h4 class="card-title-sm">Arus Beban Fasa (Phase Current)</h4>
-            <span class="mini-tag">Tersedia (EWIG Modbus)</span>
-          </div>
-          <div class="card-body">
-            <div class="phase-metrics-list">
-              <div class="phase-row">
-                <span class="phase-name phase-r">Arus Fasa R (I1)</span>
-                <div class="phase-meter-bar"><div class="fill r-fill" id="barIR" style="width: 62%;"></div></div>
-                <span class="phase-val font-mono" id="valIR">31.2 A</span>
-              </div>
-              <div class="phase-row">
-                <span class="phase-name phase-s">Arus Fasa S (I2)</span>
-                <div class="phase-meter-bar"><div class="fill s-fill" id="barIS" style="width: 58%;"></div></div>
-                <span class="phase-val font-mono" id="valIS">29.4 A</span>
-              </div>
-              <div class="phase-row">
-                <span class="phase-name phase-t">Arus Fasa T (I3)</span>
-                <div class="phase-meter-bar"><div class="fill t-fill" id="barIT" style="width: 64%;"></div></div>
-                <span class="phase-val font-mono" id="valIT">32.0 A</span>
-              </div>
-              <div class="phase-row-summary">
-                <span class="sum-label">Total Arus Akumulatif:</span>
-                <span class="sum-value font-mono" id="valITotal">92.6 A</span>
-              </div>
-            </div>
-          </div>
-        </article>
-      </div>
-
-      <!-- Telemetri Yang Tidak Tersedia (Power, Frequency, Power Factor, Energy) -->
-      <div class="section-subbar">
-        <div class="subbar-title-wrap">
-          <h3 class="subbar-title">Parameter Tambahan (Status Tidak Tersedia)</h3>
-          <span class="subbar-meta">Register telemetri belum dialokasikan pada payload firmware ESP32-S3</span>
-        </div>
-      </div>
-
-      <div class="dashboard-grid unavailable-grid">
-        <!-- Daya Aktif / Semu -->
-        <article class="telemetry-card card-unavailable">
-          <div class="card-header">
-            <h4 class="card-title-sm">Daya Aktif (Active Power)</h4>
-            <span class="badge-unavailable">Data Tidak Tersedia</span>
-          </div>
-          <div class="card-body unavail-body">
-            <div class="unavail-display">
-              <span class="unavail-placeholder font-mono">--.- kW</span>
-            </div>
-            <p class="unavail-desc">Register daya aktif Modbus (0x0012) belum dimasukkan ke paket broadcast telemetri perangkat.</p>
-          </div>
-          <div class="card-footer">
-            <span class="card-footer-note unavail-note">Status: Menunggu pembaruan payload firmware</span>
-          </div>
-        </article>
-
-        <!-- Frekuensi -->
-        <article class="telemetry-card card-unavailable">
-          <div class="card-header">
-            <h4 class="card-title-sm">Frekuensi Jala-Jala (Frequency)</h4>
-            <span class="badge-unavailable">Data Tidak Tersedia</span>
-          </div>
-          <div class="card-body unavail-body">
-            <div class="unavail-display">
-              <span class="unavail-placeholder font-mono">--.- Hz</span>
-            </div>
-            <p class="unavail-desc">Pengukuran frekuensi EWIG (nominal 50.0 Hz) tidak aktif dalam parsing JSON saat ini.</p>
-          </div>
-          <div class="card-footer">
-            <span class="card-footer-note unavail-note">Status: Sensor register tidak dikirim</span>
-          </div>
-        </article>
-
-        <!-- Faktor Daya -->
-        <article class="telemetry-card card-unavailable">
-          <div class="card-header">
-            <h4 class="card-title-sm">Faktor Daya (Power Factor)</h4>
-            <span class="badge-unavailable">Data Tidak Tersedia</span>
-          </div>
-          <div class="card-body unavail-body">
-            <div class="unavail-display">
-              <span class="unavail-placeholder font-mono">-.-- Cos φ</span>
-            </div>
-            <p class="unavail-desc">Nilai Cos φ generator belum dialokasikan pada buffer transmisi Modbus RS485.</p>
-          </div>
-          <div class="card-footer">
-            <span class="card-footer-note unavail-note">Status: Perlu pemetaan register lanjutan</span>
-          </div>
-        </article>
-
-        <!-- Total Energi Aktif -->
-        <article class="telemetry-card card-unavailable">
-          <div class="card-header">
-            <h4 class="card-title-sm">Total Energi (Active Energy)</h4>
-            <span class="badge-unavailable">Data Tidak Tersedia</span>
-          </div>
-          <div class="card-body unavail-body">
-            <div class="unavail-display">
-              <span class="unavail-placeholder font-mono">------- kWh</span>
-            </div>
-            <p class="unavail-desc">Pencatatan akumulator kWh belum diintegrasikan ke memori EEPROM/telemetri lokal.</p>
-          </div>
-          <div class="card-footer">
-            <span class="card-footer-note unavail-note">Status: Data belum diprovide</span>
-          </div>
-        </article>
-      </div>
-
-      <!-- Time-Series Chart Realtime -->
-      <div class="chart-section-card">
-        <div class="chart-header">
-          <div class="chart-title-wrap">
-            <h3 class="chart-title">Grafik Tren Waktu Nyata (Time-Series Telemetry)</h3>
-            <p class="chart-subtitle">Histori pembacaan telemetri berkesinambungan (update interval: 1 detik)</p>
-          </div>
-          <div class="chart-controls">
-            <div class="chart-toggle-group">
-              <button type="button" class="btn-chart-toggle active" data-metric="water">Level Air</button>
-              <button type="button" class="btn-chart-toggle" data-metric="temp">Suhu Mesin</button>
-              <button type="button" class="btn-chart-toggle" data-metric="voltage">Tegangan R</button>
-              <button type="button" class="btn-chart-toggle" data-metric="current">Arus R</button>
-            </div>
-            <button type="button" class="btn btn-secondary btn-sm" id="btnExportCSV">
-              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-                <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/>
-                <polyline points="7 10 12 15 17 10"/>
-                <line x1="12" y1="15" x2="12" y2="3"/>
-              </svg>
-              <span>Ekspor CSV</span>
-            </button>
           </div>
         </div>
-        <div class="chart-canvas-wrapper">
-          <canvas id="realtimeChart" width="1000" height="280"></canvas>
-          <div class="chart-tooltip" id="chartTooltip"></div>
-        </div>
-        <div class="chart-legend">
-          <div class="legend-item">
-            <span class="legend-dot" style="background-color: #699ECC;"></span>
-            <span class="legend-text" id="activeChartLegend">Level Air Tangki (0–500 Liter)</span>
+
+        <!-- 4 Telemetry Cards (Bersih, Rapi, Tanpa Kode Kecil Pengganggu, Channel di Baris Bawah) -->
+        <div class="telemetry-cards-row">
+          <!-- Card 1: Suhu Coolant (AI2) -->
+          <div class="telemetry-card">
+            <div class="card-top">
+              <span class="metric-title">SUHU COOLANT</span>
+            </div>
+            <div class="card-main">
+              <span class="metric-value font-mono" id="valEngineTemp">--.-</span>
+              <span class="metric-unit">°C</span>
+            </div>
+            <div class="card-footer-block">
+              <div class="card-status-line">
+                <span class="status-pill-small tier-normal" id="pillTempStatus">NORMAL</span>
+              </div>
+              <div class="sensor-channel-row">
+                <span class="sensor-channel">AI2 • PT100 RTD (4-20mA)</span>
+              </div>
+            </div>
           </div>
-          <span class="chart-status-indicator" id="chartBufferInfo">Buffer: 40 Titik Data Aktif</span>
+
+          <!-- Card 2: Tekanan Oli (AI1) -->
+          <div class="telemetry-card">
+            <div class="card-top">
+              <span class="metric-title">TEKANAN OLI</span>
+            </div>
+            <div class="card-main">
+              <span class="metric-value font-mono" id="valOilPressure">--.-</span>
+              <span class="metric-unit">bar</span>
+            </div>
+            <div class="card-footer-block">
+              <div class="card-status-line">
+                <span class="status-pill-small tier-normal" id="pillPressStatus">NORMAL</span>
+              </div>
+              <div class="sensor-channel-row">
+                <span class="sensor-channel">AI1 • Transducer (4-20mA)</span>
+              </div>
+            </div>
+          </div>
+
+          <!-- Card 3: Level Solar Tangki (AI3 - Referensi Validasi R3) -->
+          <div class="telemetry-card">
+            <div class="card-top">
+              <span class="metric-title">LEVEL SOLAR (TANGKI)</span>
+            </div>
+            <div class="card-main">
+              <span class="metric-value font-mono" id="valFuelLevelMm">---</span>
+              <span class="metric-unit">mm</span>
+            </div>
+            <div class="card-footer-block">
+              <div class="card-status-line">
+                <span class="status-pill-small tier-normal" id="pillFuelStatus">NORMAL</span>
+              </div>
+              <div class="sensor-channel-row">
+                <span class="sensor-channel">AI3 • Hydrostatic Submersible (4-20mA)</span>
+              </div>
+            </div>
+          </div>
+
+          <!-- Card 4: Persentase Beban (PM) -->
+          <div class="telemetry-card">
+            <div class="card-top">
+              <span class="metric-title">BEBAN GENSET</span>
+            </div>
+            <div class="card-main">
+              <span class="metric-value font-mono" id="valLoadPct">--.-</span>
+              <span class="metric-unit">%</span>
+            </div>
+            <div class="card-bar-wrapper">
+              <div class="card-bar-fill" id="barLoadPct" style="width: 0%;"></div>
+            </div>
+            <div class="card-footer-block">
+              <div class="card-status-line">
+                <span class="status-pill-small tier-normal" id="pillLoadStatus">NORMAL</span>
+              </div>
+              <div class="sensor-channel-row">
+                <span class="sensor-channel">PM • Modbus RS485 EWIG</span>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <!-- 3-Phase Voltage Consistency Block (Judul Bersih Tanpa Kode Kurung) -->
+        <div class="voltage-consistency-card">
+          <div class="voltage-header">
+            <div class="voltage-title-block">
+              <span class="voltage-title">KONSISTENSI TEGANGAN 3-FASA</span>
+              <span class="voltage-sub">Pengukuran Modbus RS485 EWIG Digital Meter • Deviasi NEMA: <strong
+                  id="valUnbalPct">0.0%</strong></span>
+            </div>
+            <div class="voltage-badge badge-nema-normal" id="badgeVoltageBalance">
+              <span class="v-status-dot" id="dotVoltageBalance"></span>
+              <span id="textVoltageBalance">SEIMBANG (NORMAL)</span>
+            </div>
+          </div>
+
+          <div class="phases-grid">
+            <div class="phase-box">
+              <div class="phase-label">FASA R (L1-N) <span class="phase-key">v_l1</span></div>
+              <div class="phase-val-row">
+                <span class="phase-num font-mono" id="valV11">---.-</span>
+                <span class="phase-unit">V</span>
+              </div>
+            </div>
+
+            <div class="phase-box">
+              <div class="phase-label">FASA S (L2-N) <span class="phase-key">v_l2</span></div>
+              <div class="phase-val-row">
+                <span class="phase-num font-mono" id="valV12">---.-</span>
+                <span class="phase-unit">V</span>
+              </div>
+            </div>
+
+            <div class="phase-box">
+              <div class="phase-label">FASA T (L3-N) <span class="phase-key">v_l3</span></div>
+              <div class="phase-val-row">
+                <span class="phase-num font-mono" id="valV13">---.-</span>
+                <span class="phase-unit">V</span>
+              </div>
+            </div>
+          </div>
         </div>
       </div>
     </section>
 
-
-    <!-- ========================================================
-         PAGE 2: KALIBRASI SENSOR
-         ======================================================== -->
-    <section class="page-view" id="page-calibration">
-      <!-- Topbar Kalibrasi -->
-      <div class="section-topbar">
-        <div class="topbar-info">
-          <h2 class="section-heading">Kalibrasi & Konfigurasi Sensor Analog (4–20mA)</h2>
-          <p class="section-desc">Pemetaan matematis sinyal arus standar industri 4–20mA melalui modul ADC ADS1115 dan resistor shunt.</p>
+    <!-- =======================================================================
+         PANEL 2: GRAFIK HISTORI / TIMESERIES (4 PARAMETER STANDAR GMS)
+         ======================================================================= -->
+    <section class="panel panel-timeseries" id="panel-timeseries" aria-labelledby="heading-timeseries">
+      <div class="panel-header panel-header-chart">
+        <div class="panel-title-group">
+          <div class="panel-badge-num">02</div>
+          <h2 class="panel-title" id="heading-timeseries">Grafik Histori Timeseries</h2>
         </div>
-        <div class="topbar-actions">
-          <button type="button" class="btn btn-secondary btn-sm" id="btnResetCalibration">
-            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-              <path d="M3 12a9 9 0 1 0 9-9 9.75 9.75 0 0 0-6.74 2.74L3 8"/>
-              <path d="M3 3v5h5"/>
-            </svg>
-            <span>Reset Standar Pabrik</span>
-          </button>
-          <button type="button" class="btn btn-primary btn-sm" id="btnSaveCalibration">
-            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-              <path d="M19 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11l5 5v11a2 2 0 0 1-2 2z"/>
-              <polyline points="17 21 17 13 7 13"/>
-              <polyline points="7 3 7 8 15 8"/>
-            </svg>
-            <span>Simpan Kalibrasi</span>
-          </button>
+
+        <!-- Tombol Filter Segmented Responsif (Selalu Sejajar Inline Sebelah Kanan Judul) -->
+        <div class="chart-selector-buttons" id="chartMetricToggles">
+          <button type="button" class="btn-chart-filter active" data-metric="all">All</button>
+          <button type="button" class="btn-chart-filter" data-metric="temp">Suhu (°C)</button>
+          <button type="button" class="btn-chart-filter" data-metric="press">Tekanan (bar)</button>
+          <button type="button" class="btn-chart-filter" data-metric="load">Beban (%)</button>
+          <button type="button" class="btn-chart-filter" data-metric="volt">Volt (V)</button>
         </div>
       </div>
 
-      <!-- Explicit Browser-Only Calibration Notice -->
-      <div class="calibration-notice-banner">
-        <div class="notice-icon">
-          <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="#294E73" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-            <circle cx="12" cy="12" r="10"/>
-            <line x1="12" y1="8" x2="12" y2="12"/>
-            <line x1="12" y1="16" x2="12.01" y2="16"/>
-          </svg>
+      <div class="timeseries-content">
+        <div class="chart-canvas-container">
+          <canvas id="gmsTimeseriesChart"></canvas>
         </div>
-        <div class="notice-content">
-          <h4 class="notice-title">Pemberitahuan Kalibrasi (Penyimpanan Lokal Peramban / Browser-Only)</h4>
-          <p class="notice-text">
-            Parameter kalibrasi yang Anda sesuaikan di halaman ini disimpan secara lokal di dalam peramban web Anda (<strong>Browser LocalStorage</strong>) untuk simulasi, verifikasi akurasi, dan pengujian formula. Kalibrasi operasional permanen pada modul mikrokontroler fisik <strong>ESP32-S3</strong> membutuhkan sinkronisasi manual melalui payload perintah konfigurasi MQTT atau flash firmware.
-          </p>
+
+        <!-- Baris Informasi Legend Dinamis (Titik Warna Muncul Sesuai Filter Aktif) -->
+        <div class="chart-footer-info" id="chartLegendInfo">
+          <span class="chart-info-item" id="legendItemTemp">
+            <span class="legend-color-dot" style="background: #2563eb;"></span> Suhu Coolant
+          </span>
+          <span class="chart-info-item" id="legendItemPress">
+            <span class="legend-color-dot" style="background: #d97706;"></span> Tekanan Oli
+          </span>
+          <span class="chart-info-item" id="legendItemLoad">
+            <span class="legend-color-dot" style="background: #7c3aed;"></span> Beban
+          </span>
+          <span class="chart-info-item" id="legendItemVolt">
+            <span class="legend-color-dot" style="background: #059669;"></span> Tegangan
+          </span>
+          <span class="chart-stream-hint">• Rentang Waktu: 20 Titik Terakhir</span>
         </div>
       </div>
+    </section>
 
-      <!-- Grid Spesifikasi Perangkat Keras & Formula Matematis -->
-      <div class="calibration-grid-2col">
-        <!-- Card 1: Konfigurasi ADS1115 & Resistor Shunt -->
-        <article class="telemetry-card">
-          <div class="card-header">
-            <h3 class="card-title">Spesifikasi Hardware & Sirkuit Pengondisi Sinyal</h3>
-            <span class="mini-tag">Hardware Reference</span>
-          </div>
-          <div class="card-body">
-            <div class="specs-table-wrapper">
-              <table class="data-table">
-                <tbody>
-                  <tr>
-                    <td class="spec-label">IC Konverter Analog (ADC)</td>
-                    <td class="spec-value font-mono">ADS1115 (Texas Instruments)</td>
-                  </tr>
-                  <tr>
-                    <td class="spec-label">Resolusi ADC</td>
-                    <td class="spec-value font-mono">16-bit (32,768 level single-ended)</td>
-                  </tr>
-                  <tr>
-                    <td class="spec-label">Penguatan PGA (Gain)</td>
-                    <td class="spec-value font-mono">GAIN_ONE (±4.096 V, LSB = 0.125 mV)</td>
-                  </tr>
-                  <tr>
-                    <td class="spec-label">Resistor Shunt Pengubah Arus</td>
-                    <td class="spec-value font-mono">Precision 150 Ω (Toleransi 0.1%)</td>
-                  </tr>
-                  <tr>
-                    <td class="spec-label">Rentang Tegangan Shunt (4–20mA)</td>
-                    <td class="spec-value font-mono">0.600 V s/d 3.000 V (Aman di bawah 3.3V)</td>
-                  </tr>
-                  <tr>
-                    <td class="spec-label">Antarmuka Komunikasi</td>
-                    <td class="spec-value font-mono">I²C Bus (Alamat: 0x48, Kecepatan: 400kHz)</td>
-                  </tr>
-                </tbody>
-              </table>
-            </div>
-          </div>
-        </article>
+    <!-- =======================================================================
+         PANEL 3: SISTEM ALARM & MONITORING RULE (REAL-TIME ACTIVE MONITOR)
+         ======================================================================= -->
+    <section class="panel panel-alarms" id="panel-alarms" aria-labelledby="heading-alarms">
+      <div class="panel-header">
+        <div class="panel-title-group">
+          <div class="panel-badge-num">03</div>
+          <h2 class="panel-title" id="heading-alarms">Sistem Alarm & Monitoring Rule</h2>
+        </div>
 
-        <!-- Card 2: Formula & Pemetaan Matematis 4–20mA -->
-        <article class="telemetry-card">
-          <div class="card-header">
-            <h3 class="card-title">Formula Matematis Pemetaan Sinyal 4–20mA</h3>
-            <span class="mini-tag">Transfer Function</span>
-          </div>
-          <div class="card-body">
-            <div class="formula-box">
-              <div class="formula-title">1. Persamaan Pembacaan Arus Loop ($I_{mA}$):</div>
-              <div class="formula-code font-mono">
-                V_shunt = Raw_ADC × 0.000125 Volt<br>
-                I_mA = (V_shunt / R_shunt) × 1000
-              </div>
-            </div>
-
-            <div class="formula-box">
-              <div class="formula-title">2. Pemetaan Suhu (0–200 °C):</div>
-              <div class="formula-code font-mono">
-                Suhu (°C) = ((I_mA - 4.0) / 16.0) × 200.0 + Offset_Suhu
-              </div>
-              <span class="formula-sub">Dimana: 4 mA = 0.0 °C dan 20 mA = 200.0 °C</span>
-            </div>
-
-            <div class="formula-box">
-              <div class="formula-title">3. Pemetaan Level Air Tangki (0–500 Unit):</div>
-              <div class="formula-code font-mono">
-                Level = ((I_mA - 4.0) / 16.0) × 500.0 + Offset_Level
-              </div>
-              <span class="formula-sub">Dimana: 4 mA = 0 Unit dan 20 mA = 500 Unit</span>
-            </div>
-          </div>
-        </article>
+        <!-- Tag Deskripsi Konsisten SCADA (Status dievaluasi di dalam tabel alarm) -->
+        <span class="panel-meta-tag">Evaluasi Mastify Rule Chain</span>
       </div>
 
-      <!-- Simulator Interaktif Kalibrasi 4–20mA -->
-      <article class="telemetry-card simulator-card">
-        <div class="card-header">
-          <div class="card-title-group">
-            <span class="sensor-badge badge-i2c">Interactive Tool</span>
-            <h3 class="card-title">Simulator Interaktif Kalibrasi Sinyal Arus 4–20mA</h3>
-          </div>
-          <span class="mini-tag">Live Calculation Engine</span>
-        </div>
-        <div class="card-body">
-          <div class="simulator-layout">
-            <!-- Kontrol Slider & Input Arus -->
-            <div class="sim-control-pane">
-              <div class="sim-field">
-                <label for="simCurrentSlider" class="field-label">
-                  <span>Geser Input Arus Loop ($I_{in}$):</span>
-                  <span class="slider-current-badge font-mono" id="simSliderValBadge">12.00 mA</span>
-                </label>
-                <input type="range" class="range-slider" id="simCurrentSlider" min="3.5" max="21.0" step="0.05" value="12.0">
-                <div class="slider-ticks">
-                  <span>3.5 mA (Fault)</span>
-                  <span>4.0 mA (0%)</span>
-                  <span>8.0 mA (25%)</span>
-                  <span>12.0 mA (50%)</span>
-                  <span>16.0 mA (75%)</span>
-                  <span>20.0 mA (100%)</span>
-                  <span>21.0 mA (Over)</span>
-                </div>
-              </div>
-
-              <div class="sim-manual-input-row">
-                <div class="input-group">
-                  <label for="simManualCurrent" class="input-lbl">Input Nilai Arus Langsung (mA):</label>
-                  <input type="number" id="simManualCurrent" class="form-input font-mono" min="0" max="25" step="0.01" value="12.00">
-                </div>
-                <div class="quick-preset-buttons">
-                  <span class="preset-label">Preset Titik Cepat:</span>
-                  <div class="preset-btn-group">
-                    <button type="button" class="btn-preset" data-current="4.00">4 mA (0%)</button>
-                    <button type="button" class="btn-preset" data-current="8.00">8 mA (25%)</button>
-                    <button type="button" class="btn-preset active" data-current="12.00">12 mA (50%)</button>
-                    <button type="button" class="btn-preset" data-current="16.00">16 mA (75%)</button>
-                    <button type="button" class="btn-preset" data-current="20.00">20 mA (100%)</button>
+      <div class="alarms-content">
+        <div class="table-responsive">
+          <table class="alarm-table">
+            <thead>
+              <tr>
+                <th class="col-waktu">WAKTU</th>
+                <th class="col-tingkatan">TINGKATAN</th>
+                <th class="col-jenis">JENIS ALARM</th>
+                <th class="col-pesan">PESAN ALARM</th>
+                <th class="col-status">STATUS</th>
+              </tr>
+            </thead>
+            <tbody id="alarmsTableBody">
+              <tr>
+                <td colspan="5" class="table-empty table-empty-normal">
+                  <div class="empty-state-container">
+                    <span class="empty-state-dot"></span>
+                    <span class="empty-state-title">Tidak Ada Alarm Aktif (Sistem Normal)</span>
                   </div>
-                </div>
-              </div>
-            </div>
-
-            <!-- Hasil Hitung Realtime Simulator -->
-            <div class="sim-results-pane">
-              <h4 class="sim-results-title">Hasil Kalkulasi Pemetaan Simultan</h4>
-              <div class="sim-results-grid">
-                <div class="result-tile">
-                  <span class="tile-lbl">Tegangan Shunt (150Ω)</span>
-                  <span class="tile-val font-mono" id="simResVolt">1.800 V</span>
-                  <span class="tile-sub">V = I × 150Ω</span>
-                </div>
-                <div class="result-tile">
-                  <span class="tile-lbl">Estimasi Raw ADC</span>
-                  <span class="tile-val font-mono" id="simResRaw">14,400</span>
-                  <span class="tile-sub">ADS1115 (0.125mV/bit)</span>
-                </div>
-                <div class="result-tile highlight-temp">
-                  <span class="tile-lbl">Hasil Konversi Suhu</span>
-                  <span class="tile-val font-mono" id="simResTemp">100.0 °C</span>
-                  <span class="tile-sub">Skala 0 s/d 200 °C</span>
-                </div>
-                <div class="result-tile highlight-water">
-                  <span class="tile-lbl">Hasil Konversi Level</span>
-                  <span class="tile-val font-mono" id="simResLevel">250.0 Unit</span>
-                  <span class="tile-sub">Skala 0 s/d 500 Unit</span>
-                </div>
-              </div>
-              <div class="sim-loop-status" id="simLoopStatusBox">
-                <span class="loop-status-dot normal"></span>
-                <span class="loop-status-text" id="simLoopStatusText">Status Sinyal: Normal Dalam Rentang Kerja (4–20 mA)</span>
-              </div>
-            </div>
-          </div>
+                </td>
+              </tr>
+            </tbody>
+          </table>
         </div>
-      </article>
 
-      <!-- Lima Titik Referensi Kalibrasi & Perhitungan Error -->
-      <article class="telemetry-card">
-        <div class="card-header">
-          <div class="card-title-group">
-            <h3 class="card-title">Tabel Verifikasi 5 Titik Referensi Kalibrasi & Galat (Measurement Error)</h3>
-            <p class="card-subtitle-text">Uji kalibrasi 5 titik standar industri (0%, 25%, 50%, 75%, 100% Span) untuk menentukan penyimpangan pengukuran.</p>
-          </div>
-          <button type="button" class="btn btn-secondary btn-sm" id="btnAutoFillIdeal">
-            <span>Isi Nilai Ideal</span>
-          </button>
+        <div class="alarm-table-footer">
+          <span class="alarm-source-indicator" id="alarmSourceNote">Evaluasi: Real-Time Telemetry Rule Chain</span>
+          <span class="alarm-count-indicator" id="alarmActiveCountText">0 Alarm Aktif</span>
         </div>
-        <div class="card-body">
-          <div class="table-responsive">
-            <table class="calibration-points-table" id="tableCalPoints">
-              <thead>
-                <tr>
-                  <th>Titik Uji</th>
-                  <th>Rentang Arus (mA)</th>
-                  <th>Suhu Teoretis (°C)</th>
-                  <th>Level Teoretis</th>
-                  <th>Suhu Terukur Aktual (°C)</th>
-                  <th>Level Terukur Aktual</th>
-                  <th>Galat Suhu (% Error)</th>
-                  <th>Galat Level (% Error)</th>
-                  <th>Status Akurasi</th>
-                </tr>
-              </thead>
-              <tbody>
-                <!-- Baris 1: 4mA (0%) -->
-                <tr data-point="1">
-                  <td><strong>Titik 1 (0%)</strong></td>
-                  <td class="font-mono">4.00 mA</td>
-                  <td class="font-mono text-muted">0.0 °C</td>
-                  <td class="font-mono text-muted">0.0</td>
-                  <td>
-                    <input type="number" step="0.1" class="table-input font-mono point-temp-in" data-idx="0" value="0.2">
-                  </td>
-                  <td>
-                    <input type="number" step="0.5" class="table-input font-mono point-level-in" data-idx="0" value="1.0">
-                  </td>
-                  <td class="font-mono error-cell" id="errTemp0">+0.10%</td>
-                  <td class="font-mono error-cell" id="errLevel0">+0.20%</td>
-                  <td><span class="badge-acc acc-pass" id="accStatus0">Akurat (&lt;1%)</span></td>
-                </tr>
-                <!-- Baris 2: 8mA (25%) -->
-                <tr data-point="2">
-                  <td><strong>Titik 2 (25%)</strong></td>
-                  <td class="font-mono">8.00 mA</td>
-                  <td class="font-mono text-muted">50.0 °C</td>
-                  <td class="font-mono text-muted">125.0</td>
-                  <td>
-                    <input type="number" step="0.1" class="table-input font-mono point-temp-in" data-idx="1" value="50.4">
-                  </td>
-                  <td>
-                    <input type="number" step="0.5" class="table-input font-mono point-level-in" data-idx="1" value="126.2">
-                  </td>
-                  <td class="font-mono error-cell" id="errTemp1">+0.20%</td>
-                  <td class="font-mono error-cell" id="errLevel1">+0.24%</td>
-                  <td><span class="badge-acc acc-pass" id="accStatus1">Akurat (&lt;1%)</span></td>
-                </tr>
-                <!-- Baris 3: 12mA (50%) -->
-                <tr data-point="3">
-                  <td><strong>Titik 3 (50%)</strong></td>
-                  <td class="font-mono">12.00 mA</td>
-                  <td class="font-mono text-muted">100.0 °C</td>
-                  <td class="font-mono text-muted">250.0</td>
-                  <td>
-                    <input type="number" step="0.1" class="table-input font-mono point-temp-in" data-idx="2" value="99.7">
-                  </td>
-                  <td>
-                    <input type="number" step="0.5" class="table-input font-mono point-level-in" data-idx="2" value="249.0">
-                  </td>
-                  <td class="font-mono error-cell" id="errTemp2">-0.15%</td>
-                  <td class="font-mono error-cell" id="errLevel2">-0.20%</td>
-                  <td><span class="badge-acc acc-pass" id="accStatus2">Akurat (&lt;1%)</span></td>
-                </tr>
-                <!-- Baris 4: 16mA (75%) -->
-                <tr data-point="4">
-                  <td><strong>Titik 4 (75%)</strong></td>
-                  <td class="font-mono">16.00 mA</td>
-                  <td class="font-mono text-muted">150.0 °C</td>
-                  <td class="font-mono text-muted">375.0</td>
-                  <td>
-                    <input type="number" step="0.1" class="table-input font-mono point-temp-in" data-idx="3" value="150.8">
-                  </td>
-                  <td>
-                    <input type="number" step="0.5" class="table-input font-mono point-level-in" data-idx="3" value="376.5">
-                  </td>
-                  <td class="font-mono error-cell" id="errTemp3">+0.40%</td>
-                  <td class="font-mono error-cell" id="errLevel3">+0.30%</td>
-                  <td><span class="badge-acc acc-pass" id="accStatus3">Akurat (&lt;1%)</span></td>
-                </tr>
-                <!-- Baris 5: 20mA (100%) -->
-                <tr data-point="5">
-                  <td><strong>Titik 5 (100%)</strong></td>
-                  <td class="font-mono">20.00 mA</td>
-                  <td class="font-mono text-muted">200.0 °C</td>
-                  <td class="font-mono text-muted">500.0</td>
-                  <td>
-                    <input type="number" step="0.1" class="table-input font-mono point-temp-in" data-idx="4" value="199.5">
-                  </td>
-                  <td>
-                    <input type="number" step="0.5" class="table-input font-mono point-level-in" data-idx="4" value="498.5">
-                  </td>
-                  <td class="font-mono error-cell" id="errTemp4">-0.25%</td>
-                  <td class="font-mono error-cell" id="errLevel4">-0.30%</td>
-                  <td><span class="badge-acc acc-pass" id="accStatus4">Akurat (&lt;1%)</span></td>
-                </tr>
-              </tbody>
-            </table>
-          </div>
-          <div class="cal-error-formula-hint">
-            <span>Metode Perhitungan Galat: <code>% Galat = (|Nilai Terukur - Nilai Teoretis| / Full Scale Span) × 100%</code>. Batas toleransi industri: Maksimal 1.00% Full Scale.</span>
-          </div>
-        </div>
-      </article>
-
-      <!-- Form Konfigurasi Kalibrasi & Manajemen LocalStorage -->
-      <article class="telemetry-card">
-        <div class="card-header">
-          <h3 class="card-title">Parameter Konfigurasi Kalibrasi & Manajemen LocalStorage</h3>
-          <span class="mini-tag">Storage & Tuning</span>
-        </div>
-        <div class="card-body">
-          <form id="calibrationConfigForm" class="calibration-form">
-            <div class="form-grid-3col">
-              <div class="form-group">
-                <label for="cfgShuntResistor" class="form-label">Nilai Resistor Shunt (Ω)</label>
-                <select id="cfgShuntResistor" class="form-select font-mono">
-                  <option value="150" selected>150 Ω (0.6V - 3.0V)</option>
-                  <option value="250">250 Ω (1.0V - 5.0V)</option>
-                  <option value="100">100 Ω (0.4V - 2.0V)</option>
-                </select>
-                <span class="form-hint">Resistor presisi konversi arus 4-20mA ke voltase.</span>
-              </div>
-
-              <div class="form-group">
-                <label for="cfgTempOffset" class="form-label">Zero Offset Suhu (°C)</label>
-                <input type="number" id="cfgTempOffset" class="form-input font-mono" step="0.05" value="0.00">
-                <span class="form-hint">Kompensasi pergeseran titik nol transmitter suhu.</span>
-              </div>
-
-              <div class="form-group">
-                <label for="cfgTempSpan" class="form-label">Span Multiplier Suhu</label>
-                <input type="number" id="cfgTempSpan" class="form-input font-mono" step="0.001" value="1.000">
-                <span class="form-hint">Faktor pengali kelurusan kurva (gain compensation).</span>
-              </div>
-
-              <div class="form-group">
-                <label for="cfgLevelOffset" class="form-label">Zero Offset Level Air</label>
-                <input type="number" id="cfgLevelOffset" class="form-input font-mono" step="0.1" value="0.00">
-                <span class="form-hint">Koreksi dasar sensor tinggi permukaan cairan.</span>
-              </div>
-
-              <div class="form-group">
-                <label for="cfgLevelSpan" class="form-label">Span Multiplier Level Air</label>
-                <input type="number" id="cfgLevelSpan" class="form-input font-mono" step="0.001" value="1.000">
-                <span class="form-hint">Faktor skala linier kapasitas tangki 0-500.</span>
-              </div>
-
-              <div class="form-group">
-                <label for="cfgA2Zero" class="form-label">Offset Kanal Analog A2 (V)</label>
-                <input type="number" id="cfgA2Zero" class="form-input font-mono" step="0.001" value="0.000">
-                <span class="form-hint">Offset nol tegangan pembacaan ADS1115 A2.</span>
-              </div>
-            </div>
-
-            <!-- Baris Manajemen Berkas (Ekspor / Impor JSON) -->
-            <div class="storage-actions-bar">
-              <div class="storage-info-wrap">
-                <span class="storage-state-icon">
-                  <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-                    <ellipse cx="12" cy="5" rx="9" ry="3"/>
-                    <path d="M21 12c0 1.66-4 3-9 3s-9-1.34-9-3"/>
-                    <path d="M3 5v14c0 1.66 4 3 9 3s9-1.34 9-3V5"/>
-                  </svg>
-                </span>
-                <span class="storage-state-text" id="localStorageStatusText">Status: Tersimpan di LocalStorage peramban</span>
-              </div>
-              <div class="storage-btns">
-                <button type="button" class="btn btn-secondary btn-sm" id="btnExportCalJSON">
-                  <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-                    <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/>
-                    <polyline points="7 10 12 15 17 10"/>
-                    <line x1="12" y1="15" x2="12" y2="3"/>
-                  </svg>
-                  <span>Ekspor JSON</span>
-                </button>
-                <label class="btn btn-secondary btn-sm file-input-label" for="calFileInput">
-                  <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-                    <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/>
-                    <polyline points="17 8 12 3 7 8"/>
-                    <line x1="12" y1="3" x2="12" y2="15"/>
-                  </svg>
-                  <span>Impor JSON</span>
-                  <input type="file" id="calFileInput" accept=".json" style="display:none;">
-                </label>
-              </div>
-            </div>
-          </form>
-        </div>
-      </article>
+      </div>
     </section>
 
-
-    <!-- ========================================================
-         PAGE 3: DEVICE & CONNECTIVITY
-         ======================================================== -->
-    <section class="page-view" id="page-device">
-      <!-- Topbar Device -->
-      <div class="section-topbar">
-        <div class="topbar-info">
-          <h2 class="section-heading">Informasi Perangkat, Jaringan & Diagnostik</h2>
-          <p class="section-desc">Pusat kendali dan status konektivitas terpadu mikrokontroler ESP32-S3, Wi-Fi, bus industri I²C / RS485, dan gateway telemetri MQTT.</p>
+    <!-- =======================================================================
+         PANEL 4: HOUR METER & STATUS MAINTENANCE
+         ======================================================================= -->
+    <section class="panel panel-maintenance" id="panel-maintenance" aria-labelledby="heading-maintenance">
+      <div class="panel-header">
+        <div class="panel-title-group">
+          <div class="panel-badge-num">04</div>
+          <h2 class="panel-title" id="heading-maintenance">Hour Meter & Status Maintenance</h2>
         </div>
-        <div class="topbar-actions">
-          <span class="badge-tag tag-simulated">Konektivitas Lokal Siap Integrasi</span>
-          <button type="button" class="btn btn-secondary btn-sm" id="btnTriggerDiag">
-            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-              <polyline points="23 4 23 10 17 10"/>
-              <polyline points="1 20 1 14 7 14"/>
-              <path d="M3.51 9a9 9 0 0 1 14.85-3.36L23 10M1 14l4.64 4.36A9 9 0 0 0 20.49 15"/>
-            </svg>
-            <span>Uji Diagnostik Sistem</span>
-          </button>
-        </div>
+        <!-- Tajuk Ringkas & Elegan Sesuai Permintaan -->
+        <span class="panel-meta-tag">Akumulasi NVS Flash & Estimasi SFC</span>
       </div>
 
-      <!-- Visualisasi Topologi Koneksi Sistem (Architecture Topology Diagram) -->
-      <article class="telemetry-card topology-card">
-        <div class="card-header">
-          <h3 class="card-title">Topologi Alur Telemetri & Arsitektur Perangkat Keras</h3>
-          <span class="mini-tag">Hardware-to-Cloud Topology</span>
-        </div>
-        <div class="card-body">
-          <div class="topology-diagram">
-            <!-- Node Sensor Fisik -->
-            <div class="topo-node topo-sensors">
-              <div class="node-icon">
-                <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="#699ECC" stroke-width="2">
-                  <path d="M12 2v20M17 5H9.5a3.5 3.5 0 0 0 0 7h5a3.5 3.5 0 0 1 0 7H6"/>
-                </svg>
-              </div>
-              <strong class="node-title">Sensor Lapangan</strong>
-              <span class="node-sub">Transmitter 4–20mA (Suhu & Level)</span>
-              <span class="node-badge node-ok">Sinyal Aktif</span>
+      <div class="maintenance-content">
+        <div class="maint-cards-grid">
+          <!-- Digital Industrial Hour Meter Card -->
+          <div class="maint-card odometer-card">
+            <div class="maint-card-header">
+              <span class="maint-card-title">TOTAL AKUMULASI JAM KERJA (HOUR METER)</span>
             </div>
-
-            <!-- Konektor Sinyal Analog -->
-            <div class="topo-line">
-              <span class="line-label font-mono">Analog Loop 4–20mA</span>
-              <div class="line-arrow"></div>
-            </div>
-
-            <!-- Node ADS1115 & EWIG -->
-            <div class="topo-node-cluster">
-              <div class="topo-node topo-subnode">
-                <strong class="node-title">ADS1115 ADC</strong>
-                <span class="node-sub">I²C (0x48) • Shunt 150Ω</span>
-                <span class="node-badge node-ok">I²C Siap</span>
-              </div>
-              <div class="topo-node topo-subnode">
-                <strong class="node-title">EWIG Meter</strong>
-                <span class="node-sub">RS485 Modbus RTU</span>
-                <span class="node-badge node-ok">Modbus OK</span>
+            <div class="odometer-container">
+              <div class="odometer-frame">
+                <div class="odometer-digits" id="odometerDigits">
+                  <span class="odo-digit">0</span>
+                  <span class="odo-digit">0</span>
+                  <span class="odo-digit">0</span>
+                  <span class="odo-digit">0</span>
+                  <span class="odo-digit">0</span>
+                  <span class="odo-dot">.</span>
+                  <span class="odo-digit odo-tenth">0</span>
+                </div>
+                <span class="odometer-unit">JAM</span>
               </div>
             </div>
-
-            <!-- Konektor Bus -->
-            <div class="topo-line">
-              <span class="line-label font-mono">I²C & RS485 UART</span>
-              <div class="line-arrow"></div>
+            <div class="maint-card-sub">
+              Disimpan persisten pada non-volatile flash (NVS) mikrokontroler ESP32-S3.
             </div>
+          </div>
 
-            <!-- Node Sentral: ESP32-S3 -->
-            <div class="topo-node topo-esp32">
-              <div class="node-icon esp-icon">
-                <svg width="26" height="26" viewBox="0 0 24 24" fill="none" stroke="#294E73" stroke-width="2">
-                  <rect x="4" y="4" width="16" height="16" rx="2"/>
-                  <rect x="9" y="9" width="6" height="6"/>
-                  <line x1="9" y1="1" x2="9" y2="4"/>
-                  <line x1="15" y1="1" x2="15" y2="4"/>
-                  <line x1="9" y1="20" x2="9" y2="23"/>
-                  <line x1="15" y1="20" x2="15" y2="23"/>
-                </svg>
+          <!-- Status Servis & Countdown Card -->
+          <div class="maint-card">
+            <div class="maint-card-header">
+              <span class="maint-card-title">STATUS SERVIS & PERAWATAN</span>
+            </div>
+            <div class="maint-due-row">
+              <div class="due-number-group">
+                <span class="due-value font-mono" id="valMaintDue">--.-</span>
+                <span class="due-unit">Jam Menuju Servis</span>
               </div>
-              <strong class="node-title">ESP32-S3 Master MCU</strong>
-              <span class="node-sub">Dual-Core 240MHz • 8MB Flash</span>
-              <span class="node-badge node-ok">Sistem Berjalan</span>
-            </div>
-
-            <!-- Konektor Jaringan Wi-Fi -->
-            <div class="topo-line">
-              <span class="line-label font-mono">Wi-Fi 802.11 b/g/n</span>
-              <div class="line-arrow"></div>
-            </div>
-
-            <!-- Node MQTT & Web Dashboard -->
-            <div class="topo-node-cluster">
-              <div class="topo-node topo-subnode">
-                <strong class="node-title">MQTT Broker</strong>
-                <span class="node-sub">Port 1883 / WSS</span>
-                <span class="node-badge node-standby">Siap Integrasi</span>
+              <div class="maint-badge-wrapper">
+                <span class="maint-status-badge badge-maint-ok" id="badgeMaintStatus">SIAP OPERASI</span>
               </div>
-              <div class="topo-node topo-subnode active-dash">
-                <strong class="node-title">Web Dashboard</strong>
-                <span class="node-sub">Antarmuka Klien Lokal</span>
-                <span class="node-badge node-ok">Aktif Terhubung</span>
+            </div>
+            <div class="maint-progress-block">
+              <div class="progress-labels">
+                <span>Jadwal Interval 250 Jam</span>
+                <span id="textMaintRemaining">Tersisa --.- Jam</span>
+              </div>
+              <div class="progress-bar-track">
+                <div class="progress-bar-fill" id="barMaintProgress" style="width: 0%;"></div>
+              </div>
+            </div>
+          </div>
+
+          <!-- Estimasi Konsumsi BBM Model SFC Card (Bersih Tanpa Catatan Kaki Panjang) -->
+          <div class="maint-card">
+            <div class="maint-card-header">
+              <span class="maint-card-title">ESTIMASI KONSUMSI BBM (MODEL SFC)</span>
+            </div>
+            <div class="fuel-val-row">
+              <span class="fuel-value font-mono" id="valFuelEst">---.-</span>
+              <span class="fuel-unit">Liter (Estimasi)</span>
+            </div>
+            <div class="fuel-meta-info">
+              <div class="fuel-chip">
+                <span class="chip-label">Metode:</span>
+                <span class="chip-val">Specific Fuel Consumption Model (Backend/Cloud)</span>
               </div>
             </div>
           </div>
         </div>
-      </article>
-
-      <!-- Grid Detail Perangkat & Jaringan -->
-      <div class="device-grid-3col">
-        <!-- Kartu 1: ESP32-S3 Device Info & Firmware -->
-        <article class="telemetry-card">
-          <div class="card-header">
-            <h3 class="card-title">Informasi Mikrokontroler ESP32-S3</h3>
-            <span class="status-indicator online" title="Status Online"></span>
-          </div>
-          <div class="card-body">
-            <div class="device-info-list">
-              <div class="info-row">
-                <span class="info-lbl">Model Modul</span>
-                <span class="info-val font-mono">ESP32-S3-WROOM-1-N8R2</span>
-              </div>
-              <div class="info-row">
-                <span class="info-lbl">Arsitektur CPU</span>
-                <span class="info-val">Tensilica Xtensa LX7 (Dual Core 240 MHz)</span>
-              </div>
-              <div class="info-row">
-                <span class="info-lbl">Memori Internal</span>
-                <span class="info-val font-mono">8 MB Flash • 2 MB PSRAM • 512KB SRAM</span>
-              </div>
-              <div class="info-row">
-                <span class="info-lbl">SRAM Bebas (Free Heap)</span>
-                <span class="info-val font-mono" id="valFreeHeap">248.6 KB (Optimal)</span>
-              </div>
-              <div class="info-row">
-                <span class="info-lbl">MAC Address Fisik</span>
-                <span class="info-val font-mono">E8:6B:EA:9F:42:1C</span>
-              </div>
-              <div class="info-row">
-                <span class="info-lbl">Versi Firmware</span>
-                <span class="info-val font-mono">v1.4.2-revS3-release</span>
-              </div>
-              <div class="info-row">
-                <span class="info-lbl">Waktu Kompilasi Firmware</span>
-                <span class="info-val font-mono">10 Okt 2026, 09:14 WIB</span>
-              </div>
-              <div class="info-row">
-                <span class="info-lbl">Waktu Aktif (Device Uptime)</span>
-                <span class="info-val font-mono" id="deviceUptimeVal">14h 06j 32m 45d</span>
-              </div>
-            </div>
-          </div>
-        </article>
-
-        <!-- Kartu 2: Status Wi-Fi & Antarmuka Jaringan -->
-        <article class="telemetry-card">
-          <div class="card-header">
-            <h3 class="card-title">Konektivitas Nirkabel Wi-Fi</h3>
-            <span class="mini-tag">Station Mode (STA)</span>
-          </div>
-          <div class="card-body">
-            <div class="device-info-list">
-              <div class="info-row">
-                <span class="info-lbl">SSID Jaringan Terhubung</span>
-                <span class="info-val font-mono">PLANT_GENSET_WLAN_01</span>
-              </div>
-              <div class="info-row">
-                <span class="info-lbl">Status Koneksi</span>
-                <span class="info-val status-badge-inline ok">Terhubung (Terkonfirmasi)</span>
-              </div>
-              <div class="info-row">
-                <span class="info-lbl">Kekuatan Sinyal (RSSI)</span>
-                <span class="info-val font-mono" id="valWifiRSSI">-62 dBm (Sangat Baik)</span>
-              </div>
-              <div class="info-row">
-                <span class="info-lbl">Alamat IP Alokasi</span>
-                <span class="info-val font-mono">192.168.1.120 (DHCP)</span>
-              </div>
-              <div class="info-row">
-                <span class="info-lbl">Default Gateway</span>
-                <span class="info-val font-mono">192.168.1.1</span>
-              </div>
-              <div class="info-row">
-                <span class="info-lbl">Subnet Mask</span>
-                <span class="info-val font-mono">255.255.255.0</span>
-              </div>
-              <div class="info-row">
-                <span class="info-lbl">DNS Server</span>
-                <span class="info-val font-mono">192.168.1.1, 8.8.8.8</span>
-              </div>
-              <div class="info-row">
-                <span class="info-lbl">Kanal Frekuensi</span>
-                <span class="info-val font-mono">Channel 6 (2.4 GHz)</span>
-              </div>
-            </div>
-          </div>
-        </article>
-
-        <!-- Kartu 3: Status Bus Industri (I²C & RS485 Modbus) -->
-        <article class="telemetry-card">
-          <div class="card-header">
-            <h3 class="card-title">Bus Industri (I²C & Modbus RS485)</h3>
-            <span class="mini-tag">Hardware Interfaces</span>
-          </div>
-          <div class="card-body">
-            <div class="bus-subpanel">
-              <div class="bus-subpanel-header">
-                <strong>I²C Bus — Modul ADC ADS1115</strong>
-                <span class="badge-acc acc-pass">Normal (ACK OK)</span>
-              </div>
-              <div class="bus-subpanel-body font-mono">
-                SDA: GPIO 21 • SCL: GPIO 22<br>
-                Alamat: 0x48 (ADDR pin ke GND)<br>
-                Sample Rate: 128 SPS • Resolusi: 16-bit
-              </div>
-            </div>
-
-            <div class="bus-subpanel" style="margin-top: 12px;">
-              <div class="bus-subpanel-header">
-                <strong>RS485 Modbus RTU — EWIG Power Meter</strong>
-                <span class="badge-acc acc-pass">Polling 1000ms OK</span>
-              </div>
-              <div class="bus-subpanel-body font-mono">
-                Port: UART2 (TX: GPIO 17, RX: GPIO 18, DE/RE: GPIO 19)<br>
-                Baudrate: 9600 bps • 8 Data Bits • No Parity • 1 Stop Bit<br>
-                Slave Address: 0x01 • CRC-16 Check: Valid
-              </div>
-            </div>
-          </div>
-        </article>
       </div>
-
-      <!-- Detail Konfigurasi MQTT Broker & Topics -->
-      <article class="telemetry-card">
-        <div class="card-header">
-          <div class="card-title-group">
-            <h3 class="card-title">Konfigurasi Gateway & Broker MQTT</h3>
-            <span class="mini-tag">Messaging Broker Parameters</span>
-          </div>
-          <div class="mqtt-status-pill">
-            <span class="status-indicator standby"></span>
-            <span>Siap Integrasi (Lokal Demo)</span>
-          </div>
-        </div>
-        <div class="card-body">
-          <div class="mqtt-config-grid">
-            <div class="mqtt-item">
-              <span class="mqtt-lbl">Broker URL / Host</span>
-              <span class="mqtt-val font-mono">broker.emqx.io / industrial-gateway.local</span>
-            </div>
-            <div class="mqtt-item">
-              <span class="mqtt-lbl">Port Standar / WebSocket</span>
-              <span class="mqtt-val font-mono">TCP 1883 • WebSocket 8083 (WSS)</span>
-            </div>
-            <div class="mqtt-item">
-              <span class="mqtt-lbl">Client ID Perangkat</span>
-              <span class="mqtt-val font-mono">ESP32S3_GENSET_MONITOR_01</span>
-            </div>
-            <div class="mqtt-item">
-              <span class="mqtt-lbl">Keep Alive / Clean Session</span>
-              <span class="mqtt-val font-mono">60 Detik • Clean Session = true</span>
-            </div>
-            <div class="mqtt-item">
-              <span class="mqtt-lbl">Topic Publikasi Telemetri (Pub)</span>
-              <span class="mqtt-val font-mono">genset/telemetry</span>
-            </div>
-            <div class="mqtt-item">
-              <span class="mqtt-lbl">Topic Status LWT (Last Will & Testament)</span>
-              <span class="mqtt-val font-mono">genset/status</span>
-            </div>
-            <div class="mqtt-item">
-              <span class="mqtt-lbl">Topic Berlangganan Perintah (Sub)</span>
-              <span class="mqtt-val font-mono">genset/cmd/calibration</span>
-            </div>
-            <div class="mqtt-item">
-              <span class="mqtt-lbl">Quality of Service (QoS)</span>
-              <span class="mqtt-val font-mono">QoS 1 (At least once delivery)</span>
-            </div>
-          </div>
-          <p class="mqtt-integration-note">
-            Catatan Integrasi: Aplikasi telah disiapkan dengan struktur data dan model telemetri JSON yang kompatibel dengan protokol MQTT. Saat hardware fisik terpasang, data simulasi dapat langsung dialihkan ke koneksi broker MQTT aktif tanpa mengubah tata letak antarmuka.
-          </p>
-        </div>
-      </article>
-
-      <!-- Live Incoming JSON Telemetry Preview -->
-      <article class="telemetry-card json-viewer-card">
-        <div class="card-header">
-          <div class="card-title-group">
-            <h3 class="card-title">Pratinjau Muatan Telemetri JSON (Incoming JSON Payload)</h3>
-            <span class="telemetry-time" id="jsonLastUpdated">Terakhir Diterima: Baru Saja</span>
-          </div>
-          <button type="button" class="btn btn-secondary btn-sm" id="btnCopyJSON">
-            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-              <rect x="9" y="9" width="13" height="13" rx="2" ry="2"/>
-              <path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"/>
-            </svg>
-            <span id="copyJsonBtnText">Salin JSON</span>
-          </button>
-        </div>
-        <div class="card-body">
-          <pre class="json-code-block font-mono" id="jsonPayloadPreview">{
-  "device_id": "ESP32S3_GENSET_01",
-  "uptime_seconds": 50792,
-  "timestamp": "2026-10-12T15:58:00Z",
-  "sensors": {
-    "water_level": { "value": 340.0, "unit": "liter", "current_ma": 14.88, "adc_pin": "A1" },
-    "temperature": { "value": 82.4, "unit": "celsius", "current_ma": 10.59, "adc_pin": "A0" },
-    "ads1115_a2": { "voltage_v": 1.842, "current_ma": 12.28, "raw_adc": 14736 }
-  },
-  "electrical": {
-    "voltage_r": 220.4,
-    "voltage_s": 219.1,
-    "voltage_t": 221.8,
-    "current_r": 31.2,
-    "current_s": 29.4,
-    "current_t": 32.0,
-    "power_kw": null,
-    "frequency_hz": null,
-    "power_factor": null,
-    "energy_kwh": null
-  },
-  "system_status": {
-    "wifi_rssi_dbm": -62,
-    "free_heap_bytes": 254566,
-    "i2c_status": "OK",
-    "modbus_status": "OK"
-  }
-}</pre>
-        </div>
-      </article>
-
-      <!-- Connection Diagnostics & Event Log Viewer -->
-      <article class="telemetry-card log-viewer-card">
-        <div class="card-header">
-          <div class="card-title-group">
-            <h3 class="card-title">Diagnostik Koneksi & Riwayat Aktivitas Sistem (Event Logs)</h3>
-            <span class="mini-tag">System Logs</span>
-          </div>
-          <div class="log-actions">
-            <button type="button" class="btn btn-secondary btn-sm" id="btnClearLogs">
-              <span>Bersihkan Log</span>
-            </button>
-            <button type="button" class="btn btn-secondary btn-sm" id="btnDownloadLogs">
-              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-                <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/>
-                <polyline points="7 10 12 15 17 10"/>
-                <line x1="12" y1="15" x2="12" y2="3"/>
-              </svg>
-              <span>Unduh Log (.txt)</span>
-            </button>
-          </div>
-        </div>
-        <div class="card-body">
-          <div class="log-table-container">
-            <table class="log-table font-mono" id="tableEventLogs">
-              <thead>
-                <tr>
-                  <th style="width: 140px;">Waktu</th>
-                  <th style="width: 100px;">Modul</th>
-                  <th style="width: 90px;">Level</th>
-                  <th>Pesan Diagnostik</th>
-                </tr>
-              </thead>
-              <tbody id="logTableBody">
-                <!-- Log entries dynamically rendered -->
-              </tbody>
-            </table>
-          </div>
-        </div>
-      </article>
     </section>
 
   </main>
 
-  <!-- Footer Aplikasi -->
-  <footer class="app-footer">
-    <div class="footer-container">
+  <!-- =========================================================================
+       FOOTER (METADATA ARSITEKTUR ZERO-LOGIC CLIENT)
+       ========================================================================= -->
+  <footer class="gms-footer">
+    <div class="footer-inner">
       <div class="footer-left">
-        <strong>Sistem Monitoring Genset Industri</strong> • ESP32-S3 Telemetry Engine
+        <strong>Tugas Akhir:</strong> Genset Monitoring System (GMS) 3-Fasa Industri • ESP32-S3 Telemetry Engine &
+        Mastify IoT Cloud.
       </div>
       <div class="footer-right">
-        <span>Tema: Soft Blue Serenity</span> • <span>Versi: 2.0.0 Final</span>
+        <span class="footer-spec">Arsitektur: Read-Only Client</span>
+        <span class="footer-divider">•</span>
+        <span class="footer-spec">Zero Logic in Frontend</span>
+        <span class="footer-divider">•</span>
+        <span class="footer-spec">2-Mode Operation (Live / Offline)</span>
       </div>
     </div>
   </footer>
 
-  <script src="app.js"></script>
+  <!-- Script Logika Client Dashboard -->
+  <script src="app.js?v=6"></script>
 </body>
+
 </html>
