@@ -2,7 +2,11 @@
   "cleanUrls": true,
   "rewrites": [
     {
-      "source": "/(.*)",
+      "source": "/api/mastify/:path*",
+      "destination": "http://178.128.107.238:8080/api/:path*"
+    },
+    {
+      "source": "/((?!api/mastify).*)",
       "destination": "/index.html"
     }
   ]

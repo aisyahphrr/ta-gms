@@ -1,0 +1,5 @@
+[[redirects]]
+  from = "/api/mastify/*"
+  to = "http://178.128.107.238:8080/api/:splat"
+  status = 200
+  force = true

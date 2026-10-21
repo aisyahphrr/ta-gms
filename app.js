@@ -31,7 +31,7 @@
   const DEFAULT_CONFIG = {
     mastifyHost: 'http://178.128.107.238:8080',
     deviceId: '7150e8b0-c2d0-11f1-b703-2ff028a3ac15',
-    jwtToken: '',
+    jwtToken: 'eyJhbGciOiJIUzUxMiJ9.eyJzdWIiOiJmYXRpbmFAbWFzY2guY2MiLCJ1c2VySWQiOiJlMzg0ODBkMC1iYzUxLTExZjAtOWMxOS1iMTMxMGVkNmI3NzkiLCJzY29wZXMiOlsiVEVOQU5UX0FETUlOIl0sInNlc3Npb25JZCI6IjJiYTMwMWNiLTZhYmYtNDQ5Yi05ZjY5LTg5OGMxODFhMDU3NSIsImV4cCI6MTc5MjEzNDIyNCwiaXNzIjoidGhpbmdzYm9hcmQuaW8iLCJpYXQiOjE3OTIxMjUyMjQsImZpcnN0TmFtZSI6IkZhdGluYSIsImxhc3ROYW1lIjoiSHVzbmEiLCJlbmFibGVkIjp0cnVlLCJpc1B1YmxpYyI6ZmFsc2UsInRlbmFudElkIjoiYTdhYjlhOTAtYTYzYS0xMWVmLTg5ZTYtY2Q2OTVkYzJjMjQyIiwiY3VzdG9tZXJJZCI6IjEzODE0MDAwLTFkZDItMTFiMi04MDgwLTgwODA4MDgwODA4MCJ9.zO4H1_FSJhbPeH94Zj8FjTorJfDFH_UXVuhoOyffK_bOHrYYHNZDNyvPFSKRezP3tRviv-q_1HQZCr0PgjGZEw',
     pollingIntervalMs: 3000
   };
 
@@ -341,6 +341,29 @@
   // 4. PEMUATAN KONFIGURASI DARI .env (SAFE VANILLA FETCH)
   // ===========================================================================
   async function loadEnvironmentConfig() {
+    // 1. Ekstraksi kredensial & token dinamis dari URL query params (?token=... & ?deviceId=...)
+    try {
+      const urlParams = new URLSearchParams(window.location.search);
+      const queryToken = urlParams.get('token') || urlParams.get('jwt');
+      const queryHost = urlParams.get('host');
+      const queryDevice = urlParams.get('deviceId') || urlParams.get('device');
+
+      if (queryToken) {
+        state.config.jwtToken = queryToken;
+        try { localStorage.setItem('GMS_JWT_TOKEN', queryToken); } catch (e) {}
+        console.info('[GMS Config] Menggunakan JWT Token dari URL parameter (?token=...)');
+      } else {
+        try {
+          const cachedToken = localStorage.getItem('GMS_JWT_TOKEN');
+          if (cachedToken) state.config.jwtToken = cachedToken;
+        } catch (e) {}
+      }
+
+      if (queryHost) state.config.mastifyHost = queryHost;
+      if (queryDevice) state.config.deviceId = queryDevice;
+    } catch (e) {}
+
+    // 2. Coba membaca file .env lokal (berhasil di localhost, 404 saat deploy di Vercel/Netlify)
     try {
       const response = await fetch('./.env', { cache: 'no-store' });
       if (!response.ok) return;
@@ -358,18 +381,35 @@
 
         if (key === 'MASTIFY_HOST') state.config.mastifyHost = value;
         if (key === 'MASTIFY_DEVICE_ID') state.config.deviceId = value;
-        if (key === 'MASTIFY_JWT_TOKEN') state.config.jwtToken = value;
+        if (key === 'MASTIFY_JWT_TOKEN' && !state.config.jwtToken) state.config.jwtToken = value;
         if (key === 'POLLING_INTERVAL_MS') state.config.pollingIntervalMs = parseInt(value, 10) || 3000;
       });
 
-      console.info('[GMS Config] Konfigurasi .env aktif:', {
+      console.info('[GMS Config] Konfigurasi aktif:', {
         host: state.config.mastifyHost,
         deviceId: state.config.deviceId,
         interval: state.config.pollingIntervalMs
       });
     } catch (err) {
-      console.warn('[GMS Config] Melewati pemuatan .env:', err.message);
+      console.warn('[GMS Config] Menggunakan konfigurasi cloud / fallback:', err.message);
     }
+  }
+
+  /**
+   * Helper Penyusunan URL REST API dengan Deteksi Reverse-Proxy Otomatis
+   * Menjamin 100% bebas dari kendala "Mixed Content" (HTTPS vs HTTP) dan CORS saat dideploy di Vercel / Netlify.
+   */
+  function getMastifyApiEndpoint(subPath) {
+    const cleanSubPath = subPath.startsWith('/') ? subPath : `/${subPath}`;
+
+    // Jika berjalan di HTTPS (seperti saat dideploy di Vercel atau Netlify)
+    // dan target host adalah plain HTTP: gunakan reverse-proxy lokal '/api/mastify'
+    if (window.location.protocol === 'https:' && state.config.mastifyHost.startsWith('http://')) {
+      return `/api/mastify${cleanSubPath}`;
+    }
+
+    // Jika di localhost / HTTP lokal, langsung gunakan host tujuan
+    return `${state.config.mastifyHost}/api${cleanSubPath}`;
   }
 
   // ===========================================================================
@@ -392,7 +432,7 @@
       'alarm_level', 'alarm_msg'
     ].join(',');
 
-    const url = `${state.config.mastifyHost}/api/plugins/telemetry/DEVICE/${state.config.deviceId}/values/timeseries?keys=${keys}`;
+    const url = getMastifyApiEndpoint(`/plugins/telemetry/DEVICE/${state.config.deviceId}/values/timeseries?keys=${keys}`);
 
     const controller = new AbortController();
     const timeoutId = setTimeout(() => controller.abort(), 4000);
@@ -665,7 +705,7 @@
    * Panel 3: REST API Live Alarm Fetcher (Mastify Cloud)
    */
   async function fetchMastifyAlarms() {
-    const url = `${state.config.mastifyHost}/api/alarm/DEVICE/${state.config.deviceId}?pageSize=10&page=0&searchStatus=ACTIVE&sortProperty=createdTime&sortOrder=DESC`;
+    const url = getMastifyApiEndpoint(`/alarm/DEVICE/${state.config.deviceId}?pageSize=10&page=0&searchStatus=ACTIVE&sortProperty=createdTime&sortOrder=DESC`);
     const controller = new AbortController();
     const timeoutId = setTimeout(() => controller.abort(), 3000);
 
