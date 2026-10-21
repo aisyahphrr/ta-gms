@@ -31,7 +31,7 @@
   const DEFAULT_CONFIG = {
     mastifyHost: 'http://178.128.107.238:8080',
     deviceId: '7150e8b0-c2d0-11f1-b703-2ff028a3ac15',
-    jwtToken: 'eyJhbGciOiJIUzUxMiJ9.eyJzdWIiOiJmYXRpbmFAbWFzY2guY2MiLCJ1c2VySWQiOiJlMzg0ODBkMC1iYzUxLTExZjAtOWMxOS1iMTMxMGVkNmI3NzkiLCJzY29wZXMiOlsiVEVOQU5UX0FETUlOIl0sInNlc3Npb25JZCI6IjJiYTMwMWNiLTZhYmYtNDQ5Yi05ZjY5LTg5OGMxODFhMDU3NSIsImV4cCI6MTc5MjEzNDIyNCwiaXNzIjoidGhpbmdzYm9hcmQuaW8iLCJpYXQiOjE3OTIxMjUyMjQsImZpcnN0TmFtZSI6IkZhdGluYSIsImxhc3ROYW1lIjoiSHVzbmEiLCJlbmFibGVkIjp0cnVlLCJpc1B1YmxpYyI6ZmFsc2UsInRlbmFudElkIjoiYTdhYjlhOTAtYTYzYS0xMWVmLTg5ZTYtY2Q2OTVkYzJjMjQyIiwiY3VzdG9tZXJJZCI6IjEzODE0MDAwLTFkZDItMTFiMi04MDgwLTgwODA4MDgwODA4MCJ9.zO4H1_FSJhbPeH94Zj8FjTorJfDFH_UXVuhoOyffK_bOHrYYHNZDNyvPFSKRezP3tRviv-q_1HQZCr0PgjGZEw',
+    jwtToken: 'eyJhbGciOiJIUzUxMiJ9.eyJzdWIiOiJmYXRpbmFAbWFzY2guY2MiLCJ1c2VySWQiOiJlMzg0ODBkMC1iYzUxLTExZjAtOWMxOS1iMTMxMGVkNmI3NzkiLCJzY29wZXMiOlsiVEVOQU5UX0FETUlOIl0sInNlc3Npb25JZCI6IjZjNDc0ODVkLWIxNGItNDc4ZC05YWI3LWI4YjNmOWVjN2ZlMCIsImV4cCI6MTc5MjU4MDgxOSwiaXNzIjoidGhpbmdzYm9hcmQuaW8iLCJpYXQiOjE3OTI1NzE4MTksImZpcnN0TmFtZSI6IkZhdGluYSIsImxhc3ROYW1lIjoiSHVzbmEiLCJlbmFibGVkIjp0cnVlLCJpc1B1YmxpYyI6ZmFsc2UsInRlbmFudElkIjoiYTdhYjlhOTAtYTYzYS0xMWVmLTg5ZTYtY2Q2OTVkYzJjMjQyIiwiY3VzdG9tZXJJZCI6IjEzODE0MDAwLTFkZDItMTFiMi04MDgwLTgwODA4MDgwODA4MCJ9.y7_BbDUgP700AHqHNxSZAEPIe-KQXOOcqgbLBIa3zGJc965a5Y582mWikyYFGsLINpGoQpYOaWpXMD_Sg-OhHQ',
     pollingIntervalMs: 3000
   };
 
@@ -403,9 +403,9 @@
     const cleanSubPath = subPath.startsWith('/') ? subPath : `/${subPath}`;
 
     // Jika berjalan di HTTPS (seperti saat dideploy di Vercel atau Netlify)
-    // dan target host adalah plain HTTP: gunakan reverse-proxy lokal '/api/mastify'
+    // dan target host adalah plain HTTP: gunakan reverse-proxy serverless '/api/mastify'
     if (window.location.protocol === 'https:' && state.config.mastifyHost.startsWith('http://')) {
-      return `/api/mastify${cleanSubPath}`;
+      return `/api/mastify?endpoint=${encodeURIComponent(cleanSubPath)}`;
     }
 
     // Jika di localhost / HTTP lokal, langsung gunakan host tujuan
@@ -1398,8 +1398,12 @@
       console.warn('[GMS Polling] Gagal menghubungi Mastify API:', err.message);
 
       // KETENTUAN UTAMA: TIDAK BOLEH AUTO-FALLBACK!
+      let displayMsg = err.message;
+      if (err.message && err.message.includes('401')) {
+        displayMsg = 'Token Expired (HTTP 401)';
+      }
       DOM.statusDot.className = 'status-indicator-dot error';
-      DOM.dataSourceText.textContent = `LIVE API: Gagal Terhubung (${err.message})`;
+      DOM.dataSourceText.textContent = `LIVE API: Gagal Terhubung (${displayMsg})`;
       if (DOM.lastSyncLabel) {
         DOM.lastSyncLabel.textContent = `Sinkron: Gagal (${new Date().toLocaleTimeString('id-ID')} WIB)`;
       }
