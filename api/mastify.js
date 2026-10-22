@@ -44,13 +44,23 @@ export default async function handler(req, res) {
     }
 
     // 3. Teruskan Header Otentikasi (X-Authorization)
+    // Prioritas 1: Gunakan token rahasia dari Environment Variable Vercel (MASTIFY_JWT_TOKEN)
+    // Prioritas 2: Fallback ke header otentikasi dari request client jika ada
     const forwardHeaders = {
       'Accept': 'application/json'
     };
 
-    const authHeader = req.headers['x-authorization'] || req.headers['authorization'];
-    if (authHeader) {
-      forwardHeaders['X-Authorization'] = authHeader;
+    const serverToken = process.env.MASTIFY_JWT_TOKEN;
+    const clientAuth = req.headers['x-authorization'] || req.headers['authorization'];
+
+    if (serverToken) {
+      forwardHeaders['X-Authorization'] = serverToken.startsWith('Bearer ')
+        ? serverToken
+        : `Bearer ${serverToken}`;
+    } else if (clientAuth) {
+      forwardHeaders['X-Authorization'] = clientAuth.startsWith('Bearer ')
+        ? clientAuth
+        : `Bearer ${clientAuth}`;
     }
 
     // 4. Lakukan request ke server Mastify via Node.js fetch (bebas Mixed Content)

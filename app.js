@@ -31,7 +31,7 @@
   const DEFAULT_CONFIG = {
     mastifyHost: 'http://178.128.107.238:8080',
     deviceId: '7150e8b0-c2d0-11f1-b703-2ff028a3ac15',
-    jwtToken: 'eyJhbGciOiJIUzUxMiJ9.eyJzdWIiOiJmYXRpbmFAbWFzY2guY2MiLCJ1c2VySWQiOiJlMzg0ODBkMC1iYzUxLTExZjAtOWMxOS1iMTMxMGVkNmI3NzkiLCJzY29wZXMiOlsiVEVOQU5UX0FETUlOIl0sInNlc3Npb25JZCI6IjZjNDc0ODVkLWIxNGItNDc4ZC05YWI3LWI4YjNmOWVjN2ZlMCIsImV4cCI6MTc5MjU4MDgxOSwiaXNzIjoidGhpbmdzYm9hcmQuaW8iLCJpYXQiOjE3OTI1NzE4MTksImZpcnN0TmFtZSI6IkZhdGluYSIsImxhc3ROYW1lIjoiSHVzbmEiLCJlbmFibGVkIjp0cnVlLCJpc1B1YmxpYyI6ZmFsc2UsInRlbmFudElkIjoiYTdhYjlhOTAtYTYzYS0xMWVmLTg5ZTYtY2Q2OTVkYzJjMjQyIiwiY3VzdG9tZXJJZCI6IjEzODE0MDAwLTFkZDItMTFiMi04MDgwLTgwODA4MDgwODA4MCJ9.y7_BbDUgP700AHqHNxSZAEPIe-KQXOOcqgbLBIa3zGJc965a5Y582mWikyYFGsLINpGoQpYOaWpXMD_Sg-OhHQ',
+    jwtToken: '', // Aman: Dikosongkan dari kode sumber. Di Vercel, token diinjeksi via serverless proxy /api/mastify
     pollingIntervalMs: 3000
   };
 
@@ -403,8 +403,10 @@
     const cleanSubPath = subPath.startsWith('/') ? subPath : `/${subPath}`;
 
     // Jika berjalan di HTTPS (seperti saat dideploy di Vercel atau Netlify)
-    // dan target host adalah plain HTTP: gunakan reverse-proxy serverless '/api/mastify'
-    if (window.location.protocol === 'https:' && state.config.mastifyHost.startsWith('http://')) {
+    // atau di domain cloud publik: gunakan reverse-proxy serverless '/api/mastify'
+    // Proxy ini otomatis menyuntikkan JWT Token rahasia & mencegah kendala CORS / Mixed Content.
+    const isLocalhost = window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1';
+    if (window.location.protocol === 'https:' || !isLocalhost) {
       return `/api/mastify?endpoint=${encodeURIComponent(cleanSubPath)}`;
     }
 
@@ -438,12 +440,18 @@
     const timeoutId = setTimeout(() => controller.abort(), 4000);
 
     try {
+      const headers = {
+        'Content-Type': 'application/json'
+      };
+      if (state.config.jwtToken) {
+        headers['X-Authorization'] = state.config.jwtToken.startsWith('Bearer ')
+          ? state.config.jwtToken
+          : `Bearer ${state.config.jwtToken}`;
+      }
+
       const response = await fetch(url, {
         method: 'GET',
-        headers: {
-          'Content-Type': 'application/json',
-          'X-Authorization': `Bearer ${state.config.jwtToken}`
-        },
+        headers: headers,
         signal: controller.signal
       });
 
@@ -710,17 +718,25 @@
     const timeoutId = setTimeout(() => controller.abort(), 3000);
 
     try {
+      const headers = {
+        'Content-Type': 'application/json'
+      };
+      if (state.config.jwtToken) {
+        headers['X-Authorization'] = state.config.jwtToken.startsWith('Bearer ')
+          ? state.config.jwtToken
+          : `Bearer ${state.config.jwtToken}`;
+      }
+
       const response = await fetch(url, {
         method: 'GET',
-        headers: {
-          'Content-Type': 'application/json',
-          'X-Authorization': `Bearer ${state.config.jwtToken}`
-        },
+        headers: headers,
         signal: controller.signal
       });
 
       clearTimeout(timeoutId);
       if (!response.ok) return null;
+
+      const json = await response.json();
 
       const rawList = Array.isArray(json.data) ? json.data : (Array.isArray(json) ? json : []);
       // Filter ketat: Pastikan alarm yang berstatus CLEARED atau memiliki clearTs tidak dimasukkan
