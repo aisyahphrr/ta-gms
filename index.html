@@ -4,7 +4,7 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>Genset Monitoring System (GMS) | Industrial IoT Dashboard</title>
+  <title>Genset Monitoring System (GMS) Dashboard</title>
   <meta name="description"
     content="Dashboard Pemantauan Genset Industri 3-Fasa berbasis ESP32-S3 dan Platform Mastify Cloud IoT.">
 
@@ -18,22 +18,31 @@
   <!-- Chart.js CDN untuk Grafik Histori Timeseries -->
   <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
 
-  <!-- Style Utama SCADA Industrial -->
-  <link rel="stylesheet" href="style.css?v=6">
+  <!-- Style Utama SCADA -->
+  <link rel="stylesheet" href="style.css?v=20">
 </head>
 
 <body>
-  <!-- =========================================================================
-       HEADER APLIKASI (2 MODE OPERASI BERSIH: LIVE REST API vs OFFLINE MODE)
-       ========================================================================= -->
   <header class="gms-header">
     <div class="header-inner">
       <!-- Brand & Metadata Sidang -->
       <div class="brand-block">
-        <div class="brand-logo">
-          <svg width="26" height="26" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2"
+        <div class="brand-logo" title="Simbol Alternator Mesin 3-Fasa Industri">
+          <svg width="26" height="26" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9"
             stroke-linecap="round" stroke-linejoin="round">
-            <path d="M13 2L3 14h9l-1 8 10-12h-9l1-8z" />
+            <!-- Stator Frame & Rotor Air Gap -->
+            <circle cx="12" cy="12" r="9.5" />
+            <circle cx="12" cy="12" r="5" stroke-dasharray="2.5 2" />
+            <!-- 3-Phase Stator Windings (120 derajat) -->
+            <path d="M12 2.5v3.5" />
+            <path d="M4.64 16.25l3.03-1.75" />
+            <path d="M19.36 16.25l-3.03-1.75" />
+            <!-- Rotor Shaft Core -->
+            <circle cx="12" cy="12" r="1.8" fill="currentColor" />
+            <!-- Phase Terminals R-S-T -->
+            <circle cx="12" cy="4" r="0.75" fill="currentColor" />
+            <circle cx="5.07" cy="16" r="0.75" fill="currentColor" />
+            <circle cx="18.93" cy="16" r="0.75" fill="currentColor" />
           </svg>
         </div>
         <div class="brand-meta">
@@ -45,28 +54,26 @@
         </div>
       </div>
 
-      <!-- Kontrol Mode Operasi (2 Mode Eksplisit Tanpa Auto-Fallback) -->
+      <!-- Kontrol Mode Operasi & Clock) -->
       <div class="header-controls">
-        <!-- Status Box Mode Operasi -->
-        <div class="connection-status" id="connectionStatusBox">
-          <span class="status-indicator-dot online" id="statusDot"></span>
-          <div class="connection-texts">
-            <span class="conn-label">MODE OPERASI:</span>
-            <span class="conn-value" id="dataSourceText">LIVE REST API (Mastify)</span>
-          </div>
+        <div class="industrial-rocker-switch" id="modeSegmentedControl" role="group" aria-label="Mode Operasi">
+          <button type="button" class="rocker-btn active" id="btnModeLive" data-mode="LIVE"
+            title="Mode Live Telemetri Mastify REST API">
+            <span class="rocker-led online" id="statusDot"></span>
+            <span class="rocker-text">LIVE REST API</span>
+          </button>
+          <button type="button" class="rocker-btn" id="btnModeOffline" data-mode="OFFLINE"
+            title="Mode Demonstrasi Data Siklis Offline">
+            <span class="rocker-led offline hidden" id="dotOffline"></span>
+            <span class="rocker-text">OFFLINE DEMO</span>
+          </button>
         </div>
 
-        <!-- Tombol Toggle Mode Operasi Bersih -->
-        <button type="button" class="btn-mode-toggle" id="btnToggleSource"
-          title="Beralih antara Mode Live REST API dan Offline Mode">
-          <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2"
-            stroke-linecap="round" stroke-linejoin="round">
-            <polyline points="23 4 23 10 17 10"></polyline>
-            <polyline points="1 20 1 14 7 14"></polyline>
-            <path d="M3.51 9a9 9 0 0 1 14.85-3.36L23 10M1 14l4.64 4.36A9 9 0 0 0 20.49 15"></path>
-          </svg>
-          <span id="btnSourceText">Beralih ke OFFLINE MODE</span>
-        </button>
+        <!-- Indikator Deskripsi Mode / Status Koneksi -->
+        <div class="connection-status-pill hidden" id="connectionStatusBox">
+          <span class="conn-value" id="dataSourceText">LIVE REST API (Mastify)</span>
+        </div>
+
 
         <!-- Waktu & Polling Timestamp -->
         <div class="header-clock-group">
@@ -78,7 +85,7 @@
   </header>
 
   <!-- =========================================================================
-       MAIN SINGLE PAGE CONTAINER (TEPAT 4 PANEL UTAMA)
+       MAIN SINGLE PAGE CONTAINER (4 PANEL UTAMA)
        ========================================================================= -->
   <main class="dashboard-grid">
 
@@ -89,9 +96,9 @@
       <div class="panel-header">
         <div class="panel-title-group">
           <div class="panel-badge-num">01</div>
-          <h2 class="panel-title" id="heading-realtime">Status & Nilai Real-Time</h2>
+          <h2 class="panel-title" id="heading-realtime">Status &amp; Nilai Real-Time</h2>
         </div>
-        <span class="panel-meta-tag">Kontrak Telemetri ESP32-S3</span>
+        <span class="panel-meta-tag">ESP32-S3 Telemetry Bus</span>
       </div>
 
       <div class="realtime-content">
@@ -103,7 +110,7 @@
           </div>
           <div class="engine-state-display">
             <div class="state-icon" id="engineStateIcon">
-              <svg width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"
+              <svg width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"
                 stroke-linecap="round" stroke-linejoin="round">
                 <circle cx="12" cy="12" r="3"></circle>
                 <path
@@ -113,7 +120,7 @@
             </div>
             <div class="state-details">
               <span class="state-text-primary" id="valEngineState">RUNNING</span>
-              <span class="state-note" id="engineStateSub">Mesin Beroperasi Nominal • Menyuplai Beban</span>
+              <span class="state-note" id="engineStateSub">Operasi Nominal • Beban Terhubung</span>
             </div>
             <div class="engine-aux-meta">
               <div class="aux-meta-badge">
@@ -128,9 +135,9 @@
           </div>
         </div>
 
-        <!-- 4 Telemetry Cards (Bersih, Rapi, Tanpa Kode Kecil Pengganggu, Channel di Baris Bawah) -->
+        <!-- 4 Telemetry Cards -->
         <div class="telemetry-cards-row">
-          <!-- Card 1: Suhu Coolant (AI2) -->
+          <!-- Card 1: Suhu Coolant (AI2 • PT100) -->
           <div class="telemetry-card">
             <div class="card-top">
               <span class="metric-title">SUHU COOLANT</span>
@@ -139,17 +146,15 @@
               <span class="metric-value font-mono" id="valEngineTemp">--.-</span>
               <span class="metric-unit">°C</span>
             </div>
-            <div class="card-footer-block">
-              <div class="card-status-line">
-                <span class="status-pill-small tier-normal" id="pillTempStatus">NORMAL</span>
-              </div>
-              <div class="sensor-channel-row">
-                <span class="sensor-channel">AI2 • PT100 RTD (4-20mA)</span>
-              </div>
+            <div class="card-status-row">
+              <span class="status-pill-small tier-normal" id="pillTempStatus">NORMAL</span>
+            </div>
+            <div class="sensor-channel-row">
+              <span class="sensor-channel">AI2 • PT100</span>
             </div>
           </div>
 
-          <!-- Card 2: Tekanan Oli (AI1) -->
+          <!-- Card 2: Tekanan Oli (AI1 • 4-20mA) -->
           <div class="telemetry-card">
             <div class="card-top">
               <span class="metric-title">TEKANAN OLI</span>
@@ -158,36 +163,32 @@
               <span class="metric-value font-mono" id="valOilPressure">--.-</span>
               <span class="metric-unit">bar</span>
             </div>
-            <div class="card-footer-block">
-              <div class="card-status-line">
-                <span class="status-pill-small tier-normal" id="pillPressStatus">NORMAL</span>
-              </div>
-              <div class="sensor-channel-row">
-                <span class="sensor-channel">AI1 • Transducer (4-20mA)</span>
-              </div>
+            <div class="card-status-row">
+              <span class="status-pill-small tier-normal" id="pillPressStatus">NORMAL</span>
+            </div>
+            <div class="sensor-channel-row">
+              <span class="sensor-channel">AI1 • 4-20mA</span>
             </div>
           </div>
 
-          <!-- Card 3: Level Solar Tangki (AI3 - Referensi Validasi R3) -->
+          <!-- Card 3: Level Solar Tangki (AI3 • Ref Level Solar) -->
           <div class="telemetry-card">
             <div class="card-top">
-              <span class="metric-title">LEVEL SOLAR (TANGKI)</span>
+              <span class="metric-title">LEVEL SOLAR</span>
             </div>
             <div class="card-main">
               <span class="metric-value font-mono" id="valFuelLevelMm">---</span>
               <span class="metric-unit">mm</span>
             </div>
-            <div class="card-footer-block">
-              <div class="card-status-line">
-                <span class="status-pill-small tier-normal" id="pillFuelStatus">NORMAL</span>
-              </div>
-              <div class="sensor-channel-row">
-                <span class="sensor-channel">AI3 • Hydrostatic Submersible (4-20mA)</span>
-              </div>
+            <div class="card-status-row">
+              <span class="status-pill-small tier-normal" id="pillFuelStatus">NORMAL</span>
+            </div>
+            <div class="sensor-channel-row">
+              <span class="sensor-channel">AI3 • Ref Level Solar</span>
             </div>
           </div>
 
-          <!-- Card 4: Persentase Beban (PM) -->
+          <!-- Card 4: Persentase Beban (RS485 Modbus) -->
           <div class="telemetry-card">
             <div class="card-top">
               <span class="metric-title">BEBAN GENSET</span>
@@ -199,23 +200,21 @@
             <div class="card-bar-wrapper">
               <div class="card-bar-fill" id="barLoadPct" style="width: 0%;"></div>
             </div>
-            <div class="card-footer-block">
-              <div class="card-status-line">
-                <span class="status-pill-small tier-normal" id="pillLoadStatus">NORMAL</span>
-              </div>
-              <div class="sensor-channel-row">
-                <span class="sensor-channel">PM • Modbus RS485 EWIG</span>
-              </div>
+            <div class="card-status-row">
+              <span class="status-pill-small tier-normal" id="pillLoadStatus">NORMAL</span>
+            </div>
+            <div class="sensor-channel-row">
+              <span class="sensor-channel">RS485 Modbus</span>
             </div>
           </div>
         </div>
 
-        <!-- 3-Phase Voltage Consistency Block (Judul Bersih Tanpa Kode Kurung) -->
+        <!-- 3-Phase Voltage Consistency Block -->
         <div class="voltage-consistency-card">
           <div class="voltage-header">
             <div class="voltage-title-block">
               <span class="voltage-title">KONSISTENSI TEGANGAN 3-FASA</span>
-              <span class="voltage-sub">Pengukuran Modbus RS485 EWIG Digital Meter • Deviasi NEMA: <strong
+              <span class="voltage-sub">Pengukuran Modbus RS485 • Deviasi NEMA: <strong
                   id="valUnbalPct">0.0%</strong></span>
             </div>
             <div class="voltage-badge badge-nema-normal" id="badgeVoltageBalance">
@@ -263,7 +262,7 @@
           <h2 class="panel-title" id="heading-timeseries">Grafik Histori Timeseries</h2>
         </div>
 
-        <!-- Tombol Filter Segmented Responsif (Selalu Sejajar Inline Sebelah Kanan Judul) -->
+        <!-- Tombol Filter Segmented Responsif -->
         <div class="chart-selector-buttons" id="chartMetricToggles">
           <button type="button" class="btn-chart-filter active" data-metric="all">All</button>
           <button type="button" class="btn-chart-filter" data-metric="temp">Suhu (°C)</button>
@@ -278,7 +277,7 @@
           <canvas id="gmsTimeseriesChart"></canvas>
         </div>
 
-        <!-- Baris Informasi Legend Dinamis (Titik Warna Muncul Sesuai Filter Aktif) -->
+        <!-- Baris Informasi Legend Dinamis -->
         <div class="chart-footer-info" id="chartLegendInfo">
           <span class="chart-info-item" id="legendItemTemp">
             <span class="legend-color-dot" style="background: #2563eb;"></span> Suhu Coolant
@@ -292,7 +291,7 @@
           <span class="chart-info-item" id="legendItemVolt">
             <span class="legend-color-dot" style="background: #059669;"></span> Tegangan
           </span>
-          <span class="chart-stream-hint">• Rentang Waktu: 20 Titik Terakhir</span>
+          <span class="chart-stream-hint">• Rolling Window: 50 Titik Terakhir</span>
         </div>
       </div>
     </section>
@@ -306,8 +305,6 @@
           <div class="panel-badge-num">03</div>
           <h2 class="panel-title" id="heading-alarms">Sistem Alarm & Monitoring Rule</h2>
         </div>
-
-        <!-- Tag Deskripsi Konsisten SCADA (Status dievaluasi di dalam tabel alarm) -->
         <span class="panel-meta-tag">Evaluasi Mastify Rule Chain</span>
       </div>
 
@@ -352,7 +349,6 @@
           <div class="panel-badge-num">04</div>
           <h2 class="panel-title" id="heading-maintenance">Hour Meter & Status Maintenance</h2>
         </div>
-        <!-- Tajuk Ringkas & Elegan Sesuai Permintaan -->
         <span class="panel-meta-tag">Akumulasi NVS Flash & Estimasi SFC</span>
       </div>
 
@@ -382,24 +378,25 @@
             </div>
           </div>
 
-          <!-- Status Servis & Countdown Card -->
+          <!-- Status Servis & Countdown Card (kiri bawah) -->
           <div class="maint-card">
             <div class="maint-card-header">
-              <span class="maint-card-title">STATUS SERVIS & PERAWATAN</span>
+              <span class="maint-card-title">STATUS SERVIS &amp; PERAWATAN</span>
             </div>
             <div class="maint-due-row">
               <div class="due-number-group">
                 <span class="due-value font-mono" id="valMaintDue">--.-</span>
-                <span class="due-unit">Jam Menuju Servis</span>
+                <span class="due-unit">Jam</span>
               </div>
               <div class="maint-badge-wrapper">
                 <span class="maint-status-badge badge-maint-ok" id="badgeMaintStatus">SIAP OPERASI</span>
               </div>
             </div>
+            <div class="maint-due-sublabel">Menuju Servis 250 Jam Berikutnya</div>
             <div class="maint-progress-block">
               <div class="progress-labels">
-                <span>Jadwal Interval 250 Jam</span>
-                <span id="textMaintRemaining">Tersisa --.- Jam</span>
+                <span>Interval 250 Jam</span>
+                <span id="textMaintRemaining">--.- Jam Tersisa</span>
               </div>
               <div class="progress-bar-track">
                 <div class="progress-bar-fill" id="barMaintProgress" style="width: 0%;"></div>
@@ -407,19 +404,20 @@
             </div>
           </div>
 
-          <!-- Estimasi Konsumsi BBM Model SFC Card (Bersih Tanpa Catatan Kaki Panjang) -->
+          <!-- Estimasi Konsumsi BBM Model SFC Card (kanan bawah) -->
           <div class="maint-card">
             <div class="maint-card-header">
               <span class="maint-card-title">ESTIMASI KONSUMSI BBM (MODEL SFC)</span>
             </div>
             <div class="fuel-val-row">
               <span class="fuel-value font-mono" id="valFuelEst">---.-</span>
-              <span class="fuel-unit">Liter (Estimasi)</span>
+              <span class="fuel-unit">L</span>
             </div>
+            <div class="maint-due-sublabel">Total Liter (Estimasi Akumulatif)</div>
             <div class="fuel-meta-info">
               <div class="fuel-chip">
                 <span class="chip-label">Metode:</span>
-                <span class="chip-val">Specific Fuel Consumption Model (Backend/Cloud)</span>
+                <span class="chip-val">SFC Model (Backend/Cloud)</span>
               </div>
             </div>
           </div>
@@ -449,7 +447,7 @@
   </footer>
 
   <!-- Script Logika Client Dashboard -->
-  <script src="app.js?v=6"></script>
+  <script src="app.js?v=20"></script>
 </body>
 
 </html>

@@ -1,21 +1,12 @@
-/**
- * =============================================================================
- * GENSET MONITORING SYSTEM (GMS) - CLIENT DASHBOARD CORE
- * Demo Sidang Tugas Akhir • Single Page Read-Only Architecture
- * Diselaraskan dengan Dokumen Acuan: R3 Final & Detail Scope Teknis v1.1 PT MASCH
- * =============================================================================
- * ATURAN MUTLAK KODE:
- * 1. ARSITEKTUR 2 MODE BERSIH (TANPA AUTO-FALLBACK):
- *    - Mode 1: "LIVE REST API (Mastify)" -> Fetch langsung ke endpoint Mastify.
- *    - Mode 2: "OFFLINE MODE (Local Data)" -> Dataset lokal statis demo sidang.
- *    - Transisi HANYA terjadi lewat tombol toggle eksplisit oleh pengguna.
- * 2. ZERO LOGIC IN FRONTEND:
- *    - JavaScript (app.js) murni sebagai Presentation Layer.
- *    - Dilarang keras melakukan kalkulasi threshold, menghitung hour meter,
- *      mengevaluasi alarm logic, atau menghitung rumus model SFC di browser.
- *    - Semua nilai telemetri dan status ditampilkan secara matang dari backend/cloud.
- * =============================================================================
- */
+// =============================================================================
+// GENSET MONITORING SYSTEM (GMS) — Dashboard Client Core
+// Demo Sidang TA • Single Page Read-Only Architecture
+// Ref: R3 Final & Detail Scope Teknis v1.1 PT MASCH
+//
+// 2 mode eksplisit, tanpa auto-fallback — transisi HANYA lewat tombol user.
+// Zero Logic in Frontend: app.js hanya Presentation Layer.
+// Semua kalkulasi (threshold, hour meter, SFC, alarm) ada di backend/firmware.
+// =============================================================================
 
 (function () {
   'use strict';
@@ -31,7 +22,7 @@
   const DEFAULT_CONFIG = {
     mastifyHost: 'http://178.128.107.238:8080',
     deviceId: '7150e8b0-c2d0-11f1-b703-2ff028a3ac15',
-    jwtToken: '', // Aman: Dikosongkan dari kode sumber. Di Vercel, token diinjeksi via serverless proxy /api/mastify
+    jwtToken: '',
     pollingIntervalMs: 3000
   };
 
@@ -44,7 +35,9 @@
     activeChartFilter: 'all', // 'all' | 'temp' | 'press' | 'load' | 'volt'
     chartInstance: null,
     offlineFrameIndex: 0,
-    currentAlarms: []
+    currentAlarms: [],
+    alarmLog: [], // default bersih: Tidak Ada Alarm Aktif (Sistem Normal)
+    activeSimulation: 'normal' // 'normal' | 'temp' | 'oil' | 'voltage' | 'freq'
   };
 
   // ===========================================================================
@@ -54,111 +47,19 @@
   const OFFLINE_CAPTURED_DATA = {
     // Snapshot telemetri berputar siklik untuk demo sidang
     frames: [
-      {
+            {
         engine_state: 'RUNNING',
         engine_state_note: 'Mesin Beroperasi Nominal • Menyuplai Beban',
-        engine_temp_c: 82.4,
+        engine_temp_c: 83.4,
         temp_status: 'NORMAL',
         oil_press_bar: 3.65,
-        press_status: 'NORMAL',
-        load_pct: 68.4,
-        load_status: 'NORMAL',
-        fuel_level_mm: 735.0,
-        fuel_status: 'NORMAL',
-        battery_v: 26.8,
-        freq_hz: 50.0,
-        v_unbal_pct: 0.6,
-        voltage_balance: 'SEIMBANG (NORMAL)',
-        v_l1: 227.0,
-        v_l2: 227.9,
-        v_l3: 230.0,
-        run_hours: 1284.5,
-        maint_due_h: 15.5,
-        maintenance_status: 'SIAP OPERASI',
-        fuel_est_l: 342.8
-      },
-      {
-        engine_state: 'RUNNING',
-        engine_state_note: 'Mesin Beroperasi Nominal • Menyuplai Beban',
-        engine_temp_c: 83.1,
-        temp_status: 'NORMAL',
-        oil_press_bar: 3.62,
-        press_status: 'NORMAL',
-        load_pct: 70.1,
-        load_status: 'NORMAL',
-        fuel_level_mm: 733.0,
-        fuel_status: 'NORMAL',
-        battery_v: 26.8,
-        freq_hz: 49.9,
-        v_unbal_pct: 0.7,
-        voltage_balance: 'SEIMBANG (NORMAL)',
-        v_l1: 226.8,
-        v_l2: 227.5,
-        v_l3: 229.8,
-        run_hours: 1284.5,
-        maint_due_h: 15.5,
-        maintenance_status: 'SIAP OPERASI',
-        fuel_est_l: 343.1
-      },
-      {
-        engine_state: 'RUNNING',
-        engine_state_note: 'Mesin Beroperasi Nominal • Menyuplai Beban',
-        engine_temp_c: 83.8,
-        temp_status: 'NORMAL',
-        oil_press_bar: 3.59,
-        press_status: 'NORMAL',
-        load_pct: 72.3,
-        load_status: 'NORMAL',
-        fuel_level_mm: 730.0,
-        fuel_status: 'NORMAL',
-        battery_v: 26.7,
-        freq_hz: 50.1,
-        v_unbal_pct: 0.8,
-        voltage_balance: 'SEIMBANG (NORMAL)',
-        v_l1: 226.4,
-        v_l2: 227.2,
-        v_l3: 229.5,
-        run_hours: 1284.5,
-        maint_due_h: 15.5,
-        maintenance_status: 'SIAP OPERASI',
-        fuel_est_l: 343.5
-      },
-      {
-        engine_state: 'RUNNING',
-        engine_state_note: 'Mesin Beroperasi Nominal • Menyuplai Beban',
-        engine_temp_c: 84.5,
-        temp_status: 'NORMAL',
-        oil_press_bar: 3.58,
-        press_status: 'NORMAL',
-        load_pct: 71.8,
-        load_status: 'NORMAL',
-        fuel_level_mm: 728.0,
-        fuel_status: 'NORMAL',
-        battery_v: 26.8,
-        freq_hz: 50.0,
-        v_unbal_pct: 0.6,
-        voltage_balance: 'SEIMBANG (NORMAL)',
-        v_l1: 227.1,
-        v_l2: 227.8,
-        v_l3: 230.1,
-        run_hours: 1284.5,
-        maint_due_h: 15.5,
-        maintenance_status: 'SIAP OPERASI',
-        fuel_est_l: 343.9
-      },
-      {
-        engine_state: 'RUNNING',
-        engine_state_note: 'Mesin Beroperasi Nominal • Menyuplai Beban',
-        engine_temp_c: 85.0,
-        temp_status: 'MAJOR',
-        oil_press_bar: 3.55,
         press_status: 'NORMAL',
         load_pct: 69.5,
         load_status: 'NORMAL',
         fuel_level_mm: 725.0,
         fuel_status: 'NORMAL',
         battery_v: 26.8,
-        freq_hz: 49.9,
+        freq_hz: 50.0,
         v_unbal_pct: 0.5,
         voltage_balance: 'SEIMBANG (NORMAL)',
         v_l1: 227.5,
@@ -172,11 +73,11 @@
       {
         engine_state: 'RUNNING',
         engine_state_note: 'Mesin Beroperasi Nominal • Menyuplai Beban',
-        engine_temp_c: 84.7,
+        engine_temp_c: 83.2,
         temp_status: 'NORMAL',
-        oil_press_bar: 3.58,
+        oil_press_bar: 3.62,
         press_status: 'NORMAL',
-        load_pct: 67.8,
+        load_pct: 68.2,
         load_status: 'NORMAL',
         fuel_level_mm: 724.0,
         fuel_status: 'NORMAL',
@@ -191,6 +92,98 @@
         maint_due_h: 15.5,
         maintenance_status: 'SIAP OPERASI',
         fuel_est_l: 344.6
+      },
+      {
+        engine_state: 'RUNNING',
+        engine_state_note: 'Mesin Beroperasi Nominal • Menyuplai Beban',
+        engine_temp_c: 83.6,
+        temp_status: 'NORMAL',
+        oil_press_bar: 3.60,
+        press_status: 'NORMAL',
+        load_pct: 71.0,
+        load_status: 'NORMAL',
+        fuel_level_mm: 721.0,
+        fuel_status: 'NORMAL',
+        battery_v: 26.7,
+        freq_hz: 50.0,
+        v_unbal_pct: 0.7,
+        voltage_balance: 'SEIMBANG (NORMAL)',
+        v_l1: 226.8,
+        v_l2: 227.5,
+        v_l3: 229.8,
+        run_hours: 1284.5,
+        maint_due_h: 15.5,
+        maintenance_status: 'SIAP OPERASI',
+        fuel_est_l: 345.0
+      },
+      {
+        engine_state: 'RUNNING',
+        engine_state_note: 'Mesin Beroperasi Nominal • Menyuplai Beban',
+        engine_temp_c: 83.8,
+        temp_status: 'NORMAL',
+        oil_press_bar: 3.58,
+        press_status: 'NORMAL',
+        load_pct: 72.1,
+        load_status: 'NORMAL',
+        fuel_level_mm: 719.0,
+        fuel_status: 'NORMAL',
+        battery_v: 26.8,
+        freq_hz: 50.0,
+        v_unbal_pct: 0.6,
+        voltage_balance: 'SEIMBANG (NORMAL)',
+        v_l1: 227.0,
+        v_l2: 227.6,
+        v_l3: 229.9,
+        run_hours: 1284.5,
+        maint_due_h: 15.5,
+        maintenance_status: 'SIAP OPERASI',
+        fuel_est_l: 345.4
+      },
+      {
+        engine_state: 'RUNNING',
+        engine_state_note: 'Mesin Beroperasi Nominal • Menyuplai Beban',
+        engine_temp_c: 83.0,
+        temp_status: 'NORMAL',
+        oil_press_bar: 3.64,
+        press_status: 'NORMAL',
+        load_pct: 69.8,
+        load_status: 'NORMAL',
+        fuel_level_mm: 717.0,
+        fuel_status: 'NORMAL',
+        battery_v: 26.8,
+        freq_hz: 50.0,
+        v_unbal_pct: 0.6,
+        voltage_balance: 'SEIMBANG (NORMAL)',
+        v_l1: 227.2,
+        v_l2: 227.8,
+        v_l3: 230.1,
+        run_hours: 1284.5,
+        maint_due_h: 15.5,
+        maintenance_status: 'SIAP OPERASI',
+        fuel_est_l: 345.9
+      },
+      {
+        engine_state: 'RUNNING',
+        engine_state_note: 'Suhu Kembali Normal • Sistem Stabil',
+        engine_temp_c: 83.1,
+        temp_status: 'NORMAL',
+        oil_press_bar: 3.60,
+        press_status: 'NORMAL',
+        load_pct: 68.9,
+        load_status: 'NORMAL',
+        fuel_level_mm: 715.0,
+        fuel_status: 'NORMAL',
+        battery_v: 26.8,
+        freq_hz: 50.0,
+        v_unbal_pct: 0.6,
+        voltage_balance: 'SEIMBANG (NORMAL)',
+        v_l1: 227.3,
+        v_l2: 228.0,
+        v_l3: 230.2,
+        run_hours: 1284.5,
+        maint_due_h: 15.5,
+        maintenance_status: 'SIAP OPERASI',
+        fuel_est_l: 346.3
       }
     ],
 
@@ -257,25 +250,6 @@
         message: 'Inisialisasi sistem telemetri 3-fasa sukses. Register Modbus RS485 EWIG tersinkron.',
         ruleStatus: 'CLEARED'
       }
-    ],
-
-    // Titik seed histori grafik awal (4 parameter standar GMS)
-    seedHistory: [
-      { time: '09:00', temp: 80.2, press: 4.35, load: 62.0, volt: 227.0 },
-      { time: '09:01', temp: 80.8, press: 4.32, load: 63.5, volt: 226.8 },
-      { time: '09:02', temp: 81.3, press: 4.30, load: 64.8, volt: 226.5 },
-      { time: '09:03', temp: 81.7, press: 4.28, load: 66.2, volt: 227.1 },
-      { time: '09:04', temp: 82.1, press: 4.26, load: 67.5, volt: 227.4 },
-      { time: '09:05', temp: 82.5, press: 4.24, load: 68.0, volt: 227.0 },
-      { time: '09:06', temp: 82.9, press: 4.23, load: 68.9, volt: 226.9 },
-      { time: '09:07', temp: 83.2, press: 4.22, load: 69.4, volt: 227.2 },
-      { time: '09:08', temp: 83.6, press: 4.20, load: 70.2, volt: 227.3 },
-      { time: '09:09', temp: 83.9, press: 4.19, load: 71.0, volt: 226.8 },
-      { time: '09:10', temp: 84.2, press: 4.18, load: 70.5, volt: 227.0 },
-      { time: '09:11', temp: 84.6, press: 4.17, load: 69.8, volt: 227.5 },
-      { time: '09:12', temp: 84.8, press: 4.16, load: 69.2, volt: 227.2 },
-      { time: '09:13', temp: 83.5, press: 4.21, load: 68.7, volt: 226.9 },
-      { time: '09:14', temp: 82.4, press: 4.25, load: 68.4, volt: 227.0 }
     ]
   };
 
@@ -284,16 +258,16 @@
   // ===========================================================================
   const DOM = {
     // Header & Mode Controls
+    btnModeLive: document.getElementById('btnModeLive'),
+    btnModeOffline: document.getElementById('btnModeOffline'),
     statusDot: document.getElementById('statusDot'),
+    dotOffline: document.getElementById('dotOffline'),
     dataSourceText: document.getElementById('dataSourceText'),
-    btnToggleSource: document.getElementById('btnToggleSource'),
-    btnSourceText: document.getElementById('btnSourceText'),
     realtimeClock: document.getElementById('realtimeClock'),
     lastSyncLabel: document.getElementById('lastSyncLabel'),
 
     // Panel 1: Status & Real-Time
     engineStateCard: document.getElementById('engineStateCard'),
-    engineBeacon: document.getElementById('engineBeacon'),
     valEngineState: document.getElementById('valEngineState'),
     engineStateSub: document.getElementById('engineStateSub'),
     valBatteryV: document.getElementById('valBatteryV'),
@@ -312,7 +286,6 @@
     valV13: document.getElementById('valV13'),
     valUnbalPct: document.getElementById('valUnbalPct'),
     badgeVoltageBalance: document.getElementById('badgeVoltageBalance'),
-    dotVoltageBalance: document.getElementById('dotVoltageBalance'),
     textVoltageBalance: document.getElementById('textVoltageBalance'),
 
     // Panel 2: Timeseries Chart & Legend Items
@@ -340,37 +313,39 @@
   // ===========================================================================
   // 4. PEMUATAN KONFIGURASI DARI .env (SAFE VANILLA FETCH)
   // ===========================================================================
+    // akses localStorage dibungkus guard agar aman di iframe / private browsing
+  function safeGetStorage(key) {
+    try { return localStorage.getItem(key); } catch (_) { return null; }
+  }
+  function safeSetStorage(key, val) {
+    try { localStorage.setItem(key, val); } catch (_) { /* no-op */ }
+  }
+
   async function loadEnvironmentConfig() {
-    // 1. Ekstraksi kredensial & token dinamis dari URL query params (?token=... & ?deviceId=...)
-    try {
-      const urlParams = new URLSearchParams(window.location.search);
-      const queryToken = urlParams.get('token') || urlParams.get('jwt');
-      const queryHost = urlParams.get('host');
-      const queryDevice = urlParams.get('deviceId') || urlParams.get('device');
+    // prioritaskan token URL ?token= / ?jwt= agar penguji sidang bisa inject token tanpa ubah .env
+    const urlParams = new URLSearchParams(window.location.search);
+    const queryToken = urlParams.get('token') || urlParams.get('jwt');
+    const queryHost = urlParams.get('host');
+    const queryDevice = urlParams.get('deviceId') || urlParams.get('device');
 
-      if (queryToken) {
-        state.config.jwtToken = queryToken;
-        try { localStorage.setItem('GMS_JWT_TOKEN', queryToken); } catch (e) {}
-        console.info('[GMS Config] Menggunakan JWT Token dari URL parameter (?token=...)');
-      } else {
-        try {
-          const cachedToken = localStorage.getItem('GMS_JWT_TOKEN');
-          if (cachedToken) state.config.jwtToken = cachedToken;
-        } catch (e) {}
-      }
+    if (queryToken) {
+      state.config.jwtToken = queryToken;
+      safeSetStorage('GMS_JWT_TOKEN', queryToken);
+    } else {
+      const cachedToken = safeGetStorage('GMS_JWT_TOKEN');
+      if (cachedToken) state.config.jwtToken = cachedToken;
+    }
 
-      if (queryHost) state.config.mastifyHost = queryHost;
-      if (queryDevice) state.config.deviceId = queryDevice;
-    } catch (e) {}
+    if (queryHost) state.config.mastifyHost = queryHost;
+    if (queryDevice) state.config.deviceId = queryDevice;
 
-    // 2. Coba membaca file .env lokal (berhasil di localhost, 404 saat deploy di Vercel/Netlify)
+    // fetch .env lokal jika tersedia (localhost); 404 wajar saat deploy di cloud
     try {
       const response = await fetch('./.env', { cache: 'no-store' });
       if (!response.ok) return;
       const text = await response.text();
-      const lines = text.split('\n');
 
-      lines.forEach(function (line) {
+      text.split('\n').forEach(function (line) {
         const trimmed = line.trim();
         if (!trimmed || trimmed.startsWith('#')) return;
         const separatorIdx = trimmed.indexOf('=');
@@ -384,33 +359,21 @@
         if (key === 'MASTIFY_JWT_TOKEN' && !state.config.jwtToken) state.config.jwtToken = value;
         if (key === 'POLLING_INTERVAL_MS') state.config.pollingIntervalMs = parseInt(value, 10) || 3000;
       });
-
-      console.info('[GMS Config] Konfigurasi aktif:', {
-        host: state.config.mastifyHost,
-        deviceId: state.config.deviceId,
-        interval: state.config.pollingIntervalMs
-      });
     } catch (err) {
       console.warn('[GMS Config] Menggunakan konfigurasi cloud / fallback:', err.message);
     }
   }
 
-  /**
-   * Helper Penyusunan URL REST API dengan Deteksi Reverse-Proxy Otomatis
-   * Menjamin 100% bebas dari kendala "Mixed Content" (HTTPS vs HTTP) dan CORS saat dideploy di Vercel / Netlify.
-   */
+  // reverse-proxy path digunakan saat di HTTPS/cloud agar bebas Mixed Content & CORS
   function getMastifyApiEndpoint(subPath) {
     const cleanSubPath = subPath.startsWith('/') ? subPath : `/${subPath}`;
 
-    // Jika berjalan di HTTPS (seperti saat dideploy di Vercel atau Netlify)
-    // atau di domain cloud publik: gunakan reverse-proxy serverless '/api/mastify'
-    // Proxy ini otomatis menyuntikkan JWT Token rahasia & mencegah kendala CORS / Mixed Content.
+    // cloud/HTTPS: pakai proxy; localhost HTTP: langsung ke host tujuan
     const isLocalhost = window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1';
     if (window.location.protocol === 'https:' || !isLocalhost) {
       return `/api/mastify?endpoint=${encodeURIComponent(cleanSubPath)}`;
     }
 
-    // Jika di localhost / HTTP lokal, langsung gunakan host tujuan
     return `${state.config.mastifyHost}/api${cleanSubPath}`;
   }
 
@@ -422,7 +385,7 @@
       'engine_state', 'status',
       'engine_temp_c', 'temperature', 'temp_status',
       'oil_press_bar', 'pressure', 'press_status',
-      'load_pct', 'load_status',
+      'load_pct', 'load', 'load_status',
       'v_l1', 'v_l2', 'v_l3', 'v_11', 'v_12', 'v_13', 'voltage',
       'v_unbal_pct', 'voltage_balance',
       'battery_v',
@@ -458,6 +421,11 @@
       clearTimeout(timeoutId);
 
       if (!response.ok) {
+        // 401 = token expired — tampilkan pesan eksplisit, jangan auto-fallback ke offline
+        if (response.status === 401) {
+          if (DOM.dataSourceText) DOM.dataSourceText.textContent = 'ERROR 401: Token JWT Expired — Perbarui token di URL atau .env';
+          if (DOM.statusDot) DOM.statusDot.className = 'rocker-led error';
+        }
         throw new Error(`HTTP ${response.status}`);
       }
 
@@ -507,27 +475,33 @@
       }
     }
 
+    // isNaN guard agar nilai 0 yang valid tidak di-mask oleh fallback
+    function safeNum(raw, fallback) {
+      const v = parseFloat(raw);
+      return isNaN(v) ? fallback : v;
+    }
+
     return {
       engine_state: getLatestVal('engine_state', 'status') || 'RUNNING',
-      engine_temp_c: parseFloat(getLatestVal('engine_temp_c', 'temperature')) || 0,
+      engine_temp_c: safeNum(getLatestVal('engine_temp_c', 'temperature'), 0),
       temp_status: getLatestVal('temp_status') || 'NORMAL',
-      oil_press_bar: parseFloat(getLatestVal('oil_press_bar', 'pressure')) || 0,
+      oil_press_bar: safeNum(getLatestVal('oil_press_bar', 'pressure'), 0),
       press_status: getLatestVal('press_status') || 'NORMAL',
-      load_pct: parseFloat(getLatestVal('load_pct')) || 0,
+      load_pct: safeNum(getLatestVal('load_pct', 'load'), 0),
       load_status: getLatestVal('load_status') || 'NORMAL',
-      fuel_level_mm: parseFloat(getLatestVal('fuel_level_mm', 'fuel_vol_l')) || 735.0,
+      fuel_level_mm: safeNum(getLatestVal('fuel_level_mm', 'fuel_vol_l'), 735.0),
       fuel_status: getLatestVal('fuel_status') || 'NORMAL',
-      battery_v: parseFloat(getLatestVal('battery_v')) || 26.8,
-      freq_hz: parseFloat(getLatestVal('freq_hz')) || 50.0,
-      v_unbal_pct: parseFloat(getLatestVal('v_unbal_pct')) || 0.6,
+      battery_v: safeNum(getLatestVal('battery_v'), 26.8),
+      freq_hz: safeNum(getLatestVal('freq_hz'), 50.0),
+      v_unbal_pct: safeNum(getLatestVal('v_unbal_pct', 'voltage_unbalance', 'unbalance'), 0.6),
       voltage_balance: getLatestVal('voltage_balance') || 'SEIMBANG (NORMAL)',
-      v_l1: parseFloat(getLatestVal('v_l1', 'v_11')) || 227.0,
-      v_l2: parseFloat(getLatestVal('v_l2', 'v_12')) || 227.9,
-      v_l3: parseFloat(getLatestVal('v_l3', 'v_13')) || 230.0,
+      v_l1: safeNum(getLatestVal('v_l1', 'v_11'), 227.0),
+      v_l2: safeNum(getLatestVal('v_l2', 'v_12'), 227.9),
+      v_l3: safeNum(getLatestVal('v_l3', 'v_13'), 230.0),
       run_hours: parsedRunHours,
       maint_due_h: parsedMaintDue,
       maintenance_status: parsedMaintStatus,
-      fuel_est_l: parseFloat(getLatestVal('fuel_est_l', 'fuelEstimate')) || 0,
+      fuel_est_l: safeNum(getLatestVal('fuel_est_l', 'fuelEstimate'), 0),
       sensor_fault: (getLatestVal('sensor_fault') === true || getLatestVal('sensor_fault') === 'true')
     };
   }
@@ -536,9 +510,6 @@
   // 6. RENDER DATA KE 4 PANEL UTAMA (ZERO LOGIC CLIENT)
   // ===========================================================================
 
-  /**
-   * Panel 1: Render Status & Nilai Real-Time
-   */
   function renderRealtimePanel(data) {
     if (!data) return;
 
@@ -553,7 +524,7 @@
       DOM.valFreqHz.textContent = Number(data.freq_hz).toFixed(1) + ' Hz';
     }
 
-    // 2. 4 Telemetry Cards (Hardware label terpisah di baris bawah agar lapang)
+    // update 4 kartu telemetri utama (suhu, oli, level solar, beban)
     DOM.valEngineTemp.textContent = Number(data.engine_temp_c).toFixed(1);
     updateStatusPill(DOM.pillTempStatus, data.temp_status || 'NORMAL');
 
@@ -645,41 +616,31 @@
     }
   }
 
+  // evaluasi status ketidakseimbangan tegangan 3-fasa NEMA (konsolidasi threshold & teks status)
   function renderNemaVoltageBalance(balanceText, unbalancePct) {
     if (!DOM.badgeVoltageBalance || !DOM.textVoltageBalance) return;
+
+    const pct = parseFloat(unbalancePct) || 0;
+    const up = String(balanceText || '').toUpperCase();
 
     let text = balanceText;
     let badgeClass = 'badge-nema-normal';
 
-    if (!text) {
-      if (unbalancePct <= 2.0) {
-        text = 'SEIMBANG (NORMAL)';
-        badgeClass = 'badge-nema-normal';
-      } else if (unbalancePct <= 3.0) {
-        text = 'WARNING (UNBALANCED)';
-        badgeClass = 'badge-nema-warning';
-      } else {
-        text = 'CRITICAL (FAULT)';
-        badgeClass = 'badge-nema-critical';
-      }
+    if (up.includes('CRIT') || up.includes('FAULT') || pct > 3.0) {
+      badgeClass = 'badge-nema-critical';
+      text = text || 'CRITICAL (FAULT)';
+    } else if (up.includes('WARN') || up.includes('MAJOR') || pct > 2.0) {
+      badgeClass = 'badge-nema-warning';
+      text = text || 'WARNING (UNBALANCED)';
     } else {
-      const up = text.toUpperCase();
-      if (up.includes('CRIT') || up.includes('FAULT') || unbalancePct > 3.0) {
-        badgeClass = 'badge-nema-critical';
-      } else if (up.includes('WARN') || up.includes('MAJOR') || unbalancePct > 2.0) {
-        badgeClass = 'badge-nema-warning';
-      } else {
-        badgeClass = 'badge-nema-normal';
-      }
+      badgeClass = 'badge-nema-normal';
+      text = text || 'SEIMBANG (NORMAL)';
     }
 
     DOM.badgeVoltageBalance.className = `voltage-badge ${badgeClass}`;
     DOM.textVoltageBalance.textContent = text;
   }
 
-  /**
-   * Panel 2: Push titik data baru ke Chart.js Timeseries (4 Parameter Standar GMS)
-   */
   function pushTimeseriesPoint(data) {
     if (!data || !state.chartInstance) return;
 
@@ -689,7 +650,7 @@
       second: '2-digit'
     });
 
-    const MAX_POINTS = 20;
+    const MAX_POINTS = 50;
     const chart = state.chartInstance;
 
     chart.data.labels.push(timeLabel);
@@ -706,12 +667,7 @@
     chart.update('none');
   }
 
-  /**
-   * Panel 3: Render Active Alarms & Alarm History (3 Tingkat Severity Mastify: NORMAL, MAJOR, CRITICAL)
-   */
-  /**
-   * Panel 3: REST API Live Alarm Fetcher (Mastify Cloud)
-   */
+  // polling alarm aktif langsung dari API ThingsBoard / Mastify
   async function fetchMastifyAlarms() {
     const url = getMastifyApiEndpoint(`/alarm/DEVICE/${state.config.deviceId}?pageSize=10&page=0&searchStatus=ACTIVE&sortProperty=createdTime&sortOrder=DESC`);
     const controller = new AbortController();
@@ -757,7 +713,8 @@
           timestamp: timeStr,
           level: normalizeSeverityTier(item.severity),
           ruleType: formatAlarmRuleName(item.type),
-          message: (item.details && item.details.message) || item.type || 'Peringatan aktif dari Mastify Rule Chain.',
+          // Mastify jarang kirim details.message saat status Active — fallback ke lookup ALARM_RULE_MAP
+          message: (item.details && item.details.message) || getDefaultAlarmMessage(item.type),
           ruleStatus: item.status || 'ACTIVE'
         };
       });
@@ -767,34 +724,50 @@
     }
   }
 
-  /**
-   * Helper Pemetaan Nama Jenis Alarm ke Kode Teknis Asli (SCADA Industrial Standard)
-   */
+  // normalisasi jenis alarm ke kode teknis acuan
+  // lookup terpadu: normalisasi kode rule + pesan default fallback jika Mastify tidak kirim field message
+  const ALARM_RULE_MAP = {
+    FREQ:   { code: 'FREQ_FAULT',    msg: 'Frekuensi alternator menyimpang di luar batas nominal 50.0 Hz.' },
+    TEMP:   { code: 'ENGINE_TEMP',   msg: 'Suhu pendingin engine terdeteksi melebihi ambang batas aman.' },
+    OIL:    { code: 'OIL_PRESSURE',  msg: 'Tekanan pelumas oli di bawah ambang batas aman.' },
+    PRESS:  { code: 'OIL_PRESSURE',  msg: 'Tekanan pelumas oli di bawah ambang batas aman.' },
+    VOLT:   { code: 'VOLTAGE_FAULT', msg: 'Terdeteksi deviasi ketidakseimbangan tegangan 3-fasa NEMA.' },
+    NEMA:   { code: 'VOLTAGE_FAULT', msg: 'Terdeteksi deviasi ketidakseimbangan tegangan 3-fasa NEMA.' },
+    SENSOR: { code: 'SENSOR_FAULT',  msg: 'Arus loop 4-20mA sensor di luar rentang standar NAMUR NE43.' },
+    NAMUR:  { code: 'SENSOR_FAULT',  msg: 'Arus loop 4-20mA sensor di luar rentang standar NAMUR NE43.' },
+    FUEL:   { code: 'FUEL_LEVEL',    msg: 'Level solar tangki genset di bawah batas aman operasional.' },
+    BATT:   { code: 'BATTERY_FAULT', msg: 'Tegangan baterai starter lemah di bawah batas 24.0 V.' },
+    LOAD:   { code: 'LOAD_OVERLOAD', msg: 'Beban genset melebihi kapasitas daya nominal (overload).' },
+    ENGINE: { code: 'ENGINE_FAULT',  msg: 'Anomali proteksi engine terdeteksi oleh rule chain.' },
+    TRIP:   { code: 'ENGINE_FAULT',  msg: 'Anomali proteksi engine terdeteksi oleh rule chain.' },
+    FAULT:  { code: 'ENGINE_FAULT',  msg: 'Anomali proteksi engine terdeteksi oleh rule chain.' }
+  };
+
   function formatAlarmRuleName(ruleType) {
     const r = String(ruleType || '').toUpperCase().trim();
-    if (r.includes('FREQ')) return 'FREQ_FAULT';
-    if (r.includes('TEMP')) return 'ENGINE_TEMP';
-    if (r.includes('OIL') || r.includes('PRESS')) return 'OIL_PRESSURE';
-    if (r.includes('VOLT') || r.includes('NEMA')) return 'VOLTAGE_FAULT';
-    if (r.includes('SENSOR') || r.includes('NAMUR')) return 'SENSOR_FAULT';
-    if (r.includes('FUEL')) return 'FUEL_LEVEL';
-    if (r.includes('BATT')) return 'BATTERY_FAULT';
-    if (r.includes('LOAD')) return 'LOAD_OVERLOAD';
-    if (r.includes('ENGINE') || r.includes('TRIP') || r.includes('FAULT')) return 'ENGINE_FAULT';
-    return r || 'SYS_ALARM';
+    const match = Object.keys(ALARM_RULE_MAP).find(k => r.includes(k));
+    return match ? ALARM_RULE_MAP[match].code : (r || 'SYS_ALARM');
   }
 
   function getDefaultAlarmMessage(type) {
     const t = String(type || '').toUpperCase();
-    if (t.includes('FREQ')) return 'Frekuensi alternator menyimpang di luar batas nominal 50.0 Hz.';
-    if (t.includes('TEMP')) return 'Suhu pendingin engine terdeteksi melebihi ambang batas aman.';
-    if (t.includes('OIL') || t.includes('PRESS')) return 'Tekanan pelumas oli di bawah ambang batas aman.';
-    if (t.includes('VOLT')) return 'Terdeteksi deviasi ketidakseimbangan tegangan 3-fasa NEMA.';
-    if (t.includes('SENSOR')) return 'Arus loop 4-20mA sensor di luar rentang standar NAMUR NE43.';
-    if (t.includes('FUEL')) return 'Level solar tangki genset di bawah batas aman operasional.';
-    if (t.includes('BATT')) return 'Tegangan baterai starter lemah di bawah batas 24.0 V.';
-    if (t.includes('LOAD')) return 'Beban genset melebihi kapasitas daya nominal (overload).';
-    return 'Peringatan anomali aktif dari Mastify Rule Chain.';
+    const match = Object.keys(ALARM_RULE_MAP).find(k => t.includes(k));
+    return match ? ALARM_RULE_MAP[match].msg : 'Peringatan anomali aktif dari Mastify Rule Chain.';
+  }
+
+  // 4 status resmi Mastify / ThingsBoard — hoisted agar tersedia di seluruh modul
+  function formatMastifyStatus(statusStr) {
+    const s = String(statusStr || '').toUpperCase().trim();
+    if (s === 'ACTIVE_ACK' || s === 'ACKNOWLEDGED' || s === 'ACK') {
+      return { text: 'Acknowledged', cssClass: 'status-acknowledged' };
+    }
+    if (s === 'CLEARED_UNACK' || s === 'UNACKNOWLEDGED' || s === 'UNACK') {
+      return { text: 'Unacknowledged', cssClass: 'status-unacknowledged' };
+    }
+    if (s.startsWith('CLEARED') || s === 'CLEARED') {
+      return { text: 'Cleared', cssClass: 'status-cleared' };
+    }
+    return { text: 'Active', cssClass: 'status-active' };
   }
 
   function normalizeSeverityTier(level) {
@@ -810,10 +783,8 @@
     return 'tier-normal';
   }
 
-  /**
-   * Evaluasi Otomatis Alarm dari Parameter Telemetri (Offline / MQTTX Testing / Fallback Rules)
-   * Berdasarkan Aturan Ambang Batas Dokumen Detail Scope Teknis v1.1 PT MASCH
-   */
+  // evaluasi rule chain lokal — dipakai di offline mode & sebagai fallback jika Mastify API kosong
+  // threshold sesuai Dokumen Detail Scope Teknis v1.1 PT MASCH
   function evaluateTelemetryAlarms(t, timeStr) {
     if (!t) return [];
     const alarms = [];
@@ -1010,13 +981,48 @@
     return alarms;
   }
 
-  /**
-   * Panel 3: Render Real-Time Active Alarms Table
-   * Format 5 Kolom Resmi: WAKTU | TINGKATAN | JENIS ALARM | PESAN ALARM | STATUS
-   */
-  function renderAlarmSystem(alarms, sourceLabel) {
-    state.currentAlarms = alarms || [];
-    const count = state.currentAlarms.length;
+  // render tabel alarm aktif & riwayat perubahan status (5 kolom teknis)
+  function renderAlarmSystem(currentActiveAlarms, sourceLabel) {
+    const activeList = currentActiveAlarms || [];
+    const timeStr = new Date().toLocaleTimeString('id-ID', { hour: '2-digit', minute: '2-digit', second: '2-digit' });
+
+    // Peta active rules saat ini
+    const activeRuleMap = new Map();
+    activeList.forEach(a => {
+      activeRuleMap.set(a.ruleType, a);
+    });
+
+    // transisi ke CLEARED jika kondisi telemetri sudah normal kembali
+    state.alarmLog.forEach(item => {
+      if (item.ruleStatus === 'ACTIVE' && !activeRuleMap.has(item.ruleType)) {
+        item.ruleStatus = 'CLEARED';
+        item.timestamp = timeStr;
+        item.message = `Parameter ${item.ruleType} telah kembali normal dalam batas toleransi aman.`;
+      }
+    });
+
+    // update timestamp jika alarm masih aktif, atau unshift alarm baru
+    activeList.forEach(newAlarm => {
+      const existing = state.alarmLog.find(item => item.ruleType === newAlarm.ruleType && item.ruleStatus === 'ACTIVE');
+      if (existing) {
+        existing.message = newAlarm.message;
+        existing.timestamp = newAlarm.timestamp || timeStr;
+        existing.level = newAlarm.level;
+      } else {
+        state.alarmLog.unshift({
+          timestamp: newAlarm.timestamp || timeStr,
+          level: newAlarm.level,
+          ruleType: newAlarm.ruleType,
+          message: newAlarm.message,
+          ruleStatus: 'ACTIVE'
+        });
+      }
+    });
+
+    // Batasi histori alarm log internal hingga 20 item
+    if (state.alarmLog.length > 20) {
+      state.alarmLog = state.alarmLog.slice(0, 20);
+    }
 
     const tbody = DOM.alarmsTableBody || document.getElementById('alarmsTableBody');
     if (!tbody) return;
@@ -1026,13 +1032,19 @@
       sourceNote.textContent = `Evaluasi: ${sourceLabel}`;
     }
 
+    const activeCount = state.alarmLog.filter(a => a.ruleStatus === 'ACTIVE').length;
     const countText = DOM.alarmActiveCountText || document.getElementById('alarmActiveCountText');
     if (countText) {
-      countText.textContent = `${count} Alarm Aktif`;
+      countText.textContent = `${activeCount} Alarm Aktif`;
+      if (activeCount > 0) {
+        countText.className = 'alarm-count-indicator count-alert';
+      } else {
+        countText.className = 'alarm-count-indicator count-normal';
+      }
     }
 
-    // KONDISI 1: SEMUA NORMAL (TIDAK ADA ALARM AKTIF) -> Keterangan Terpusat (Empty State)
-    if (count === 0) {
+    // Jika seluruh histori alarm kosong
+    if (state.alarmLog.length === 0) {
       tbody.innerHTML = `
         <tr>
           <td colspan="5" class="table-empty table-empty-normal">
@@ -1045,30 +1057,33 @@
       return;
     }
 
-    // KONDISI 2: TERDAPAT ALARM AKTIF (MAJOR / CRITICAL)
-    let rowsHtml = '';
-    state.currentAlarms.forEach(function (alarm) {
+    // tampilkan seluruh histori alarm — wrap pesan panjang alami (tidak dipotong)
+    const displayRows = state.alarmLog;
+    const rows = [];
+    displayRows.forEach(function (alarm) {
       const tier = normalizeSeverityTier(alarm.level);
       const tierClass = getTierClass(tier);
-      const rowHighlightClass = (tier === 'CRITICAL') ? 'alarm-row-active-critical' : 'alarm-row-active-major';
+      const statusInfo = formatMastifyStatus(alarm.ruleStatus);
+      const isActive = (statusInfo.text === 'Active' || statusInfo.text === 'Acknowledged');
+      const rowHighlightClass = isActive
+        ? (tier === 'CRITICAL' ? 'alarm-row-active-critical' : 'alarm-row-active-major')
+        : 'alarm-row-cleared';
       const ruleCode = String(alarm.ruleType || 'SYS_EVENT').toUpperCase();
+      const statusTextHtml = `<span class="alarm-status-text ${statusInfo.cssClass}">${statusInfo.text}</span>`;
 
-      rowsHtml += `
+      rows.push(`
         <tr class="${rowHighlightClass}">
           <td class="alarm-time-cell">${alarm.timestamp} WIB</td>
           <td><span class="tier-pill ${tierClass}">${tier}</span></td>
           <td><span class="alarm-rule-code">${ruleCode}</span></td>
-          <td class="alarm-msg-cell">${alarm.message}</td>
-          <td><span class="alarm-status-rule status-active">${alarm.ruleStatus || 'ACTIVE'}</span></td>
-        </tr>`;
+          <td class="alarm-msg-cell" title="${alarm.message}">${alarm.message}</td>
+          <td>${statusTextHtml}</td>
+        </tr>`);
     });
 
-    tbody.innerHTML = rowsHtml;
+    tbody.innerHTML = rows.join('');
   }
 
-  /**
-   * Panel 4: Render Hour Meter & Maintenance (Zero Logic)
-   */
   function renderMaintenancePanel(data) {
     if (!data) return;
 
@@ -1097,10 +1112,7 @@
     DOM.badgeMaintStatus.textContent = statusText;
 
     const statusUpper = statusText.toUpperCase();
-    // Detail Scope v1.1 S7:
-    // - CRITICAL (maint_due_h <= 0 atau SERVIS OVERDUE): Wajib diservis -> Badge MERAH
-    // - MAJOR (maint_due_h 1.0 - 20.0 jam atau PERLU SERVIS): Jadwal servis mendekat -> Badge KUNING/AMBER
-    // - NORMAL (maint_due_h > 20.0 jam): SIAP OPERASI -> Badge HIJAU
+    // status servis dievaluasi dari field payload backend; fallback threshold 20 jam
     if (displayDue <= 0 || statusUpper.includes('OVERDUE') || statusUpper.includes('KRITIS') || statusUpper.includes('TERLAMBAT')) {
       DOM.badgeMaintStatus.className = 'maint-status-badge badge-maint-critical';
     } else if (statusUpper.includes('PERLU') || statusUpper.includes('SEGERA') || statusUpper.includes('WARN')) {
@@ -1154,17 +1166,21 @@
       return;
     }
 
+    // seragamkan font global Chart.js ke font utama UI
+    Chart.defaults.font.family = "'Plus Jakarta Sans', sans-serif";
+
     const ctx = DOM.chartCanvas.getContext('2d');
 
     const gradBlue = ctx.createLinearGradient(0, 0, 0, 250);
     gradBlue.addColorStop(0, 'rgba(37, 99, 235, 0.14)');
     gradBlue.addColorStop(1, 'rgba(37, 99, 235, 0.0)');
 
-    const initialLabels = OFFLINE_CAPTURED_DATA.seedHistory.map(item => item.time);
-    const initialTemp = OFFLINE_CAPTURED_DATA.seedHistory.map(item => item.temp);
-    const initialPress = OFFLINE_CAPTURED_DATA.seedHistory.map(item => item.press);
-    const initialLoad = OFFLINE_CAPTURED_DATA.seedHistory.map(item => item.load);
-    const initialVolt = OFFLINE_CAPTURED_DATA.seedHistory.map(item => item.volt);
+    // Grafik dimulai bersih (zero seed) untuk kedua mode; titik data terakumulasi dinamis per siklus
+    const initialLabels = [];
+    const initialTemp = [];
+    const initialPress = [];
+    const initialLoad = [];
+    const initialVolt = [];
 
     state.chartInstance = new Chart(ctx, {
       type: 'line',
@@ -1241,10 +1257,12 @@
         },
         scales: {
           x: {
-            grid: { color: '#e2e8f0' },
+            grid: { color: 'rgba(226, 232, 240, 0.7)' },
             ticks: {
               color: '#64748b',
-              font: { family: 'JetBrains Mono', size: 10 }
+              font: { family: 'JetBrains Mono', size: 9 },
+              maxTicksLimit: 12,
+              autoSkip: true
             }
           },
           y: {
@@ -1255,26 +1273,35 @@
               display: true,
               text: 'Suhu (°C) / Beban (%)',
               color: '#475569',
-              font: { size: 10, weight: '600' }
+              font: { family: "'Plus Jakarta Sans', sans-serif", size: 10, weight: '600' }
             },
-            grid: { color: '#e2e8f0' },
-            ticks: { color: '#64748b', font: { family: 'JetBrains Mono', size: 10 } },
-            suggestedMin: 50,
-            suggestedMax: 100
+            grid: { color: 'rgba(226, 232, 240, 0.7)' },
+            ticks: { color: '#64748b', font: { family: 'JetBrains Mono', size: 9 } },
+            min: 0,
+            max: 100
           },
           y1: {
             type: 'linear',
-            display: false,
+            display: true,
             position: 'right',
-            suggestedMin: 0,
-            suggestedMax: 8
+            title: {
+              display: true,
+              text: 'Tekanan (bar)',
+              color: '#d97706',
+              font: { family: "'Plus Jakarta Sans', sans-serif", size: 10, weight: '600' }
+            },
+            grid: { drawOnChartArea: false },
+            ticks: { color: '#d97706', font: { family: 'JetBrains Mono', size: 9 } },
+            min: 0,
+            max: 6
           },
           y2: {
             type: 'linear',
             display: false,
             position: 'right',
-            suggestedMin: 180,
-            suggestedMax: 250
+            grid: { drawOnChartArea: false },
+            min: 180,
+            max: 250
           }
         }
       }
@@ -1294,42 +1321,119 @@
     }
   }
 
-  /**
-   * Filter Grafik & Update Titik Indikator Legend Warna Secara Dinamis
-   */
+  // filter parameter chart dan penyesuaian min-max sumbu Y dinamis
   function applyChartFilter(metric) {
     if (!state.chartInstance) return;
-    const datasets = state.chartInstance.data.datasets;
+    state.activeChartFilter = metric;
+    const chart = state.chartInstance;
+    const datasets = chart.data.datasets;
+    const scales = chart.options.scales;
 
-    // Toggle datasets di Chart.js
+    // Multi-Axis & Dynamic Min-Max Switching
     if (metric === 'all') {
       datasets[0].hidden = false;
+      datasets[0].yAxisID = 'y';
       datasets[1].hidden = false;
+      datasets[1].yAxisID = 'y1'; // Multi-axis right untuk tekanan oli
       datasets[2].hidden = false;
+      datasets[2].yAxisID = 'y';
       datasets[3].hidden = false;
+      datasets[3].yAxisID = 'y2';
+
+      scales.y.display = true;
+      scales.y.position = 'left';
+      scales.y.min = 0;
+      scales.y.max = 100;
+      scales.y.title.display = true;
+      scales.y.title.text = 'Suhu (°C) / Beban (%)';
+      scales.y.title.color = '#475569';
+      scales.y.ticks.color = '#64748b';
+
+      scales.y1.display = true;
+      scales.y1.position = 'right';
+      scales.y1.min = 0;
+      scales.y1.max = 6;
+      scales.y1.title.display = true;
+      scales.y1.title.text = 'Tekanan (bar)';
+      scales.y1.title.color = '#d97706';
+      scales.y1.ticks.color = '#d97706';
+
+      scales.y2.display = false;
     } else if (metric === 'temp') {
       datasets[0].hidden = false;
+      datasets[0].yAxisID = 'y';
       datasets[1].hidden = true;
       datasets[2].hidden = true;
       datasets[3].hidden = true;
+
+      scales.y.display = true;
+      scales.y.position = 'left';
+      scales.y.min = 40;
+      scales.y.max = 110;
+      scales.y.title.display = true;
+      scales.y.title.text = 'Suhu Coolant (°C)';
+      scales.y.title.color = '#2563eb';
+      scales.y.ticks.color = '#2563eb';
+
+      scales.y1.display = false;
+      scales.y2.display = false;
     } else if (metric === 'press') {
       datasets[0].hidden = true;
       datasets[1].hidden = false;
+      datasets[1].yAxisID = 'y'; // Map langsung ke sumbu utama kiri
       datasets[2].hidden = true;
       datasets[3].hidden = true;
+
+      scales.y.display = true;
+      scales.y.position = 'left';
+      scales.y.min = 0;
+      scales.y.max = 6;
+      scales.y.title.display = true;
+      scales.y.title.text = 'Tekanan Oli Pelumas (bar)';
+      scales.y.title.color = '#d97706';
+      scales.y.ticks.color = '#d97706';
+
+      scales.y1.display = false;
+      scales.y2.display = false;
     } else if (metric === 'load') {
       datasets[0].hidden = true;
       datasets[1].hidden = true;
       datasets[2].hidden = false;
+      datasets[2].yAxisID = 'y';
       datasets[3].hidden = true;
+
+      scales.y.display = true;
+      scales.y.position = 'left';
+      scales.y.min = 0;
+      scales.y.max = 100;
+      scales.y.title.display = true;
+      scales.y.title.text = 'Beban Genset (%)';
+      scales.y.title.color = '#7c3aed';
+      scales.y.ticks.color = '#7c3aed';
+
+      scales.y1.display = false;
+      scales.y2.display = false;
     } else if (metric === 'volt') {
       datasets[0].hidden = true;
       datasets[1].hidden = true;
       datasets[2].hidden = true;
       datasets[3].hidden = false;
+      datasets[3].yAxisID = 'y'; // Map langsung ke sumbu utama kiri
+
+      scales.y.display = true;
+      scales.y.position = 'left';
+      scales.y.min = 180;
+      scales.y.max = 260;
+      scales.y.title.display = true;
+      scales.y.title.text = 'Tegangan Fasa R / v_l1 (V)';
+      scales.y.title.color = '#059669';
+      scales.y.ticks.color = '#059669';
+
+      scales.y1.display = false;
+      scales.y2.display = false;
     }
 
-    state.chartInstance.update();
+    chart.update();
 
     // Toggle Titik Warna Legend Footer Dinamis Sesuai Filter Aktif
     updateChartLegendVisibility(metric);
@@ -1338,32 +1442,19 @@
   function updateChartLegendVisibility(metric) {
     if (!DOM.legendItemTemp || !DOM.legendItemPress || !DOM.legendItemLoad || !DOM.legendItemVolt) return;
 
-    if (metric === 'all') {
-      DOM.legendItemTemp.style.display = 'inline-flex';
-      DOM.legendItemPress.style.display = 'inline-flex';
-      DOM.legendItemLoad.style.display = 'inline-flex';
-      DOM.legendItemVolt.style.display = 'inline-flex';
-    } else if (metric === 'temp') {
-      DOM.legendItemTemp.style.display = 'inline-flex';
-      DOM.legendItemPress.style.display = 'none';
-      DOM.legendItemLoad.style.display = 'none';
-      DOM.legendItemVolt.style.display = 'none';
-    } else if (metric === 'press') {
-      DOM.legendItemTemp.style.display = 'none';
-      DOM.legendItemPress.style.display = 'inline-flex';
-      DOM.legendItemLoad.style.display = 'none';
-      DOM.legendItemVolt.style.display = 'none';
-    } else if (metric === 'load') {
-      DOM.legendItemTemp.style.display = 'none';
-      DOM.legendItemPress.style.display = 'none';
-      DOM.legendItemLoad.style.display = 'inline-flex';
-      DOM.legendItemVolt.style.display = 'none';
-    } else if (metric === 'volt') {
-      DOM.legendItemTemp.style.display = 'none';
-      DOM.legendItemPress.style.display = 'none';
-      DOM.legendItemLoad.style.display = 'none';
-      DOM.legendItemVolt.style.display = 'inline-flex';
-    }
+    // map metric key -> which legend items are visible
+    const VISIBILITY = {
+      all:   { temp: true,  press: true,  load: true,  volt: true  },
+      temp:  { temp: true,  press: false, load: false, volt: false },
+      press: { temp: false, press: true,  load: false, volt: false },
+      load:  { temp: false, press: false, load: true,  volt: false },
+      volt:  { temp: false, press: false, load: false, volt: true  }
+    };
+    const vis = VISIBILITY[metric] || VISIBILITY.all;
+    DOM.legendItemTemp.style.display  = vis.temp  ? 'inline-flex' : 'none';
+    DOM.legendItemPress.style.display = vis.press ? 'inline-flex' : 'none';
+    DOM.legendItemLoad.style.display  = vis.load  ? 'inline-flex' : 'none';
+    DOM.legendItemVolt.style.display  = vis.volt  ? 'inline-flex' : 'none';
   }
 
   // ===========================================================================
@@ -1391,15 +1482,14 @@
       const data = await fetchMastifyTelemetry();
       if (!data) throw new Error('Data telemetri kosong');
 
-      DOM.statusDot.className = 'status-indicator-dot online';
-      DOM.dataSourceText.textContent = 'LIVE REST API (Mastify)';
+      if (DOM.statusDot) DOM.statusDot.className = 'rocker-led online';
+      if (DOM.dataSourceText) DOM.dataSourceText.textContent = 'LIVE REST API (Mastify)';
 
       renderRealtimePanel(data);
       pushTimeseriesPoint(data);
       renderMaintenancePanel(data);
 
-      // MEKANISME DUAL ALARM SOURCE:
-      // 1. Tarik alarm aktif langsung dari API Alarm Mastify
+      // dual source: coba alarm langsung dari Mastify API, fallback ke evaluasi rule lokal
       const liveAlarms = await fetchMastifyAlarms();
       if (liveAlarms !== null && liveAlarms.length > 0) {
         renderAlarmSystem(liveAlarms, 'Mastify Live Alarm API');
@@ -1418,8 +1508,8 @@
       if (err.message && err.message.includes('401')) {
         displayMsg = 'Token Expired (HTTP 401)';
       }
-      DOM.statusDot.className = 'status-indicator-dot error';
-      DOM.dataSourceText.textContent = `LIVE API: Gagal Terhubung (${displayMsg})`;
+      if (DOM.statusDot) DOM.statusDot.className = 'rocker-led error';
+      if (DOM.dataSourceText) DOM.dataSourceText.textContent = `LIVE API: Gagal Terhubung (${displayMsg})`;
       if (DOM.lastSyncLabel) {
         DOM.lastSyncLabel.textContent = `Sinkron: Gagal (${new Date().toLocaleTimeString('id-ID')} WIB)`;
       }
@@ -1430,7 +1520,7 @@
           <tr>
             <td colspan="5" class="table-empty" style="color: #b91c1c; font-style: normal; padding: 25px 10px !important;">
               <div style="font-weight: 700; font-size: 0.85rem; margin-bottom: 4px;">⚠️ LIVE REST API Terputus (${err.message})</div>
-              <div style="font-size: 0.74rem; color: var(--text-muted);">Tidak dapat memverifikasi status alarm dari Mastify Cloud. Beralih ke <strong>OFFLINE MODE</strong> untuk demonstrasi data lokal.</div>
+              <div style="font-size: 0.74rem; color: var(--text-muted);">Tidak dapat memverifikasi status alarm dari Mastify Cloud. Beralih ke <strong>OFFLINE DEMO</strong> untuk demonstrasi data lokal.</div>
             </td>
           </tr>`;
       }
@@ -1439,35 +1529,87 @@
     }
   }
 
+  // generator data telemetri offline (mendukung injeksi skenario alarm via keyboard untuk demo sidang)
   function getNextOfflineFrame() {
     const frames = OFFLINE_CAPTURED_DATA.frames;
-    const frame = frames[state.offlineFrameIndex % frames.length];
+    const baseFrame = frames[state.offlineFrameIndex % frames.length];
     state.offlineFrameIndex++;
+
+    // clone agar tidak mutasi dataset dasar
+    const frame = Object.assign({}, baseFrame);
+
+    // injeksi skenario alarm jika diaktifkan via hotkey keyboard
+    if (state.activeSimulation === 'temp') {
+      frame.engine_temp_c = 88.5;
+      frame.temp_status = 'MAJOR';
+      frame.engine_state_note = 'SIMULASI SIDANG: Peringatan Suhu Tinggi (Overheat)';
+    } else if (state.activeSimulation === 'oil') {
+      frame.oil_press_bar = 1.45;
+      frame.press_status = 'CRITICAL';
+      frame.engine_state_note = 'SIMULASI SIDANG: Tekanan Pelumas Oli Drop Rendah';
+    } else if (state.activeSimulation === 'voltage') {
+      frame.v_l1 = 208.0;
+      frame.v_l2 = 227.0;
+      frame.v_l3 = 239.5;
+      frame.v_unbal_pct = 4.3;
+      frame.voltage_balance = 'CRITICAL (FAULT)';
+      frame.engine_state_note = 'SIMULASI SIDANG: Ketidakseimbangan Tegangan NEMA';
+    } else if (state.activeSimulation === 'freq') {
+      frame.freq_hz = 48.2;
+      frame.engine_state_note = 'SIMULASI SIDANG: Deviasi Frekuensi Alternator';
+    }
+
     return frame;
   }
 
-  function toggleOperationMode() {
-    if (state.currentMode === MODES.LIVE) {
-      state.currentMode = MODES.OFFLINE;
+  // trigger skenario simulasi demo sidang (tanpa tombol di web: via Keyboard atau Console)
+  window.gmsSimulate = function (scenarioKey) {
+    const valid = ['normal', 'temp', 'oil', 'voltage', 'freq'];
+    const key = String(scenarioKey || 'normal').toLowerCase();
+    state.activeSimulation = valid.includes(key) ? key : 'normal';
+    console.info(`[GMS Demo Simulasi] Skenario aktif: ${state.activeSimulation.toUpperCase()}`);
+    if (state.currentMode === MODES.OFFLINE) {
+      executeTelemetryCycle();
+    }
+  };
 
-      DOM.statusDot.className = 'status-indicator-dot offline';
-      DOM.dataSourceText.textContent = 'OFFLINE MODE (Local Data)';
-      DOM.btnSourceText.textContent = 'Beralih ke LIVE REST API';
-      DOM.btnToggleSource.classList.add('is-offline');
+  function setOperationMode(mode) {
+    if (mode === state.currentMode) return;
+    state.currentMode = mode;
+    updateModeUI();
+    executeTelemetryCycle();
+  }
 
-      console.info('[GMS Mode] Beralih ke OFFLINE MODE (Data Demo Sidang)');
-    } else {
-      state.currentMode = MODES.LIVE;
+  function updateModeUI() {
+    const isLive = (state.currentMode === MODES.LIVE);
 
-      DOM.statusDot.className = 'status-indicator-dot online';
-      DOM.dataSourceText.textContent = 'LIVE REST API (Mastify)';
-      DOM.btnSourceText.textContent = 'Beralih ke OFFLINE MODE';
-      DOM.btnToggleSource.classList.remove('is-offline');
-
-      console.info('[GMS Mode] Beralih ke LIVE REST API (Mastify Cloud)');
+    if (DOM.btnModeLive) {
+      DOM.btnModeLive.classList.toggle('active', isLive);
+    }
+    if (DOM.btnModeOffline) {
+      DOM.btnModeOffline.classList.toggle('active', !isLive);
     }
 
-    executeTelemetryCycle();
+    // LED indikator hanya menyala pada tombol rocker yang dipilih
+    if (isLive) {
+      if (DOM.statusDot) {
+        DOM.statusDot.classList.remove('hidden');
+        DOM.statusDot.className = 'rocker-led online';
+      }
+      if (DOM.dotOffline) {
+        DOM.dotOffline.classList.add('hidden');
+      }
+      if (DOM.dataSourceText) DOM.dataSourceText.textContent = 'LIVE REST API (Mastify)';
+    } else {
+      if (DOM.statusDot) {
+        DOM.statusDot.classList.add('hidden');
+      }
+      if (DOM.dotOffline) {
+        DOM.dotOffline.classList.remove('hidden');
+        DOM.dotOffline.className = 'rocker-led offline';
+      }
+      if (DOM.dataSourceText) DOM.dataSourceText.textContent = 'OFFLINE DEMO (Local Data)';
+    }
   }
 
   // ===========================================================================
@@ -1503,9 +1645,42 @@
   // 10. SETUP EVENT LISTENERS & BOOTSTRAP
   // ===========================================================================
   function setupEventListeners() {
-    if (DOM.btnToggleSource) {
-      DOM.btnToggleSource.addEventListener('click', toggleOperationMode);
+    if (DOM.btnModeLive) {
+      DOM.btnModeLive.addEventListener('click', function () {
+        setOperationMode(MODES.LIVE);
+      });
     }
+    if (DOM.btnModeOffline) {
+      DOM.btnModeOffline.addEventListener('click', function () {
+        setOperationMode(MODES.OFFLINE);
+      });
+    }
+
+    // Hotkey demo sidang (rahasia di keyboard, tanpa tombol tambahan di web):
+    // Tekan 0 / N: Normal (Semua hijau, alarm cleared)
+    // Tekan 1 / T: Overheat (Alarm ENGINE_TEMP)
+    // Tekan 2 / P: Low Oil Pressure (Alarm OIL_PRESSURE)
+    // Tekan 3 / V: Voltage Fault NEMA (Alarm VOLTAGE_FAULT)
+    // Tekan 4 / F: Frequency Trip (Alarm FREQ_FAULT)
+    // Tekan C    : Clear Alarms (Normalkan semua alarm)
+    window.addEventListener('keydown', function (e) {
+      // abaikan jika user sedang mengetik di input field
+      if (e.target && (e.target.tagName === 'INPUT' || e.target.tagName === 'TEXTAREA')) return;
+      const k = e.key.toLowerCase();
+      if (k === '0' || k === 'n') window.gmsSimulate('normal');
+      else if (k === '1' || k === 't') window.gmsSimulate('temp');
+      else if (k === '2' || k === 'p') window.gmsSimulate('oil');
+      else if (k === '3' || k === 'v') window.gmsSimulate('voltage');
+      else if (k === '4' || k === 'f') window.gmsSimulate('freq');
+      else if (k === 'c') window.gmsSimulate('normal');
+    });
+
+    // Cek juga URL parameter ?sim=temp / ?sim=oil untuk kemudahan demo
+    try {
+      const urlParams = new URLSearchParams(window.location.search);
+      const sim = urlParams.get('sim');
+      if (sim) window.gmsSimulate(sim);
+    } catch (_) { }
   }
 
   async function initApplication() {
@@ -1514,6 +1689,7 @@
     startRealtimeClock();
     await loadEnvironmentConfig();
     initChart();
+    updateModeUI();
 
     const initialFrame = OFFLINE_CAPTURED_DATA.frames[0];
     renderRealtimePanel(initialFrame);
