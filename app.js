@@ -299,6 +299,8 @@
     dataSourceText: document.getElementById('dataSourceText'),
     realtimeClock: document.getElementById('realtimeClock'),
     lastSyncLabel: document.getElementById('lastSyncLabel'),
+    connHealthBadge: document.getElementById('connHealthBadge'),
+    connHealthText: document.getElementById('connHealthText'),
 
     // Panel 1: Status & Real-Time
     engineStateCard: document.getElementById('engineStateCard'),
@@ -604,7 +606,9 @@
     }
     if (maxTs > 0) {
       state.lastTelemetryTs = maxTs;
-      updateConnectionHealthBadge(maxTs);
+      if (typeof updateConnectionHealthBadge === 'function') {
+        updateConnectionHealthBadge(maxTs);
+      }
     }
 
     // Helper konversi angka murni tanpa fallback buatan (null jika data belum tersedia)
@@ -1469,7 +1473,9 @@
     }
 
     // seragamkan font global Chart.js ke font utama UI
-    Chart.defaults.font.family = "'Plus Jakarta Sans', sans-serif";
+    if (window.Chart && window.Chart.defaults && window.Chart.defaults.font) {
+      window.Chart.defaults.font.family = "'Plus Jakarta Sans', sans-serif";
+    }
 
     const ctx = DOM.chartCanvas.getContext('2d');
 
@@ -1929,6 +1935,37 @@
   // ===========================================================================
   // 9. REALTIME CLOCK & UTILS
   // ===========================================================================
+    // ===========================================================================
+  // 8. HEALTH CHECK STATUS BADGE
+  // ===========================================================================
+  function updateConnectionHealthBadge(overrideTs) {
+    if (!DOM.connHealthBadge || !DOM.connHealthText) return;
+
+    if (state.currentMode === MODES.OFFLINE) {
+      DOM.connHealthBadge.className = 'connection-health-pill health-offline';
+      DOM.connHealthText.textContent = 'OFFLINE MODE (DATA LAB)';
+      return;
+    }
+
+    const ts = (overrideTs !== undefined && overrideTs !== null) ? overrideTs : state.lastTelemetryTs;
+    if (!ts || ts <= 0) {
+      DOM.connHealthBadge.className = 'connection-health-pill health-disconnected';
+      DOM.connHealthText.textContent = 'DISCONNECTED / HARDWARE OFF';
+      return;
+    }
+
+    const now = Date.now();
+    const diffSec = Math.round((now - ts) / 1000);
+
+    if (diffSec <= 30) {
+      DOM.connHealthBadge.className = 'connection-health-pill health-online';
+      DOM.connHealthText.textContent = 'ONLINE (HARDWARE)';
+    } else {
+      DOM.connHealthBadge.className = 'connection-health-pill health-disconnected';
+      DOM.connHealthText.textContent = 'DISCONNECTED / HARDWARE OFF';
+    }
+  }
+
   function startRealtimeClock() {
     function updateClock() {
       const now = new Date();
