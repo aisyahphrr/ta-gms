@@ -2057,26 +2057,31 @@
   }
 
   async function initApplication() {
-    console.info('[GMS] Memulai Inisialisasi Dashboard Genset Monitoring System...');
+    try {
+      console.info('[GMS] Memulai Inisialisasi Dashboard Genset Monitoring System...');
 
-    startRealtimeClock();
-    await loadEnvironmentConfig();
-    initChart();
-    updateModeUI();
+      startRealtimeClock();
+      setupEventListeners();
+      await loadEnvironmentConfig();
+      initChart();
+      updateModeUI();
 
-    const initialFrame = (USE_OFFLINE_DATA || state.currentMode === MODES.OFFLINE) ? (OFFLINE_CAPTURED_DATA.frames && OFFLINE_CAPTURED_DATA.frames[0] || {}) : {};
-    renderRealtimePanel(initialFrame);
-    renderMaintenancePanel(initialFrame);
+      const initialFrame = (state.currentMode === MODES.OFFLINE)
+        ? (OFFLINE_CAPTURED_DATA.frames && OFFLINE_CAPTURED_DATA.frames[0] || {})
+        : {};
+      renderRealtimePanel(initialFrame);
+      renderMaintenancePanel(initialFrame);
 
-    const initialAlarms = evaluateTelemetryAlarms(initialFrame);
-    renderAlarmSystem(initialAlarms, 'Inisialisasi Sistem');
+      const initialAlarms = evaluateTelemetryAlarms(initialFrame);
+      renderAlarmSystem(initialAlarms, 'Inisialisasi Sistem');
 
-    setupEventListeners();
+      executeTelemetryCycle();
+      state.pollTimer = setInterval(executeTelemetryCycle, state.config.pollingIntervalMs);
 
-    executeTelemetryCycle();
-    state.pollTimer = setInterval(executeTelemetryCycle, state.config.pollingIntervalMs);
-
-    console.info('[GMS] Dashboard siap digunakan. Mode Awal: LIVE REST API.');
+      console.info('[GMS] Dashboard siap digunakan. Mode Awal: LIVE REST API.');
+    } catch (err) {
+      console.error('[GMS Init Error]', err);
+    }
   }
 
   if (document.readyState === 'loading') {
