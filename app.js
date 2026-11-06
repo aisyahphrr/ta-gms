@@ -303,6 +303,8 @@
     // Panel 1: Status & Real-Time
     engineStateCard: document.getElementById('engineStateCard'),
     valEngineState: document.getElementById('valEngineState'),
+    valEngSpeedRpm: document.getElementById('valEngSpeedRpm'),
+    valIUnbalPct: document.getElementById('valIUnbalPct'),
     engineStateSub: document.getElementById('engineStateSub'),
     valBatteryV: document.getElementById('valBatteryV'),
     valFreqHz: document.getElementById('valFreqHz'),
@@ -579,75 +581,111 @@
         const entry = raw[k];
         if (entry !== undefined && entry !== null) {
           if (Array.isArray(entry) && entry.length > 0) {
-            return entry[0].value;
+            const val = entry[0].value;
+            if (val !== null && val !== undefined) {
+              return val;
+            }
+            continue; // jika value di array null, lanjut periksa candidateKey berikutnya
           }
-          return entry;
+          if (entry !== null && entry !== undefined) {
+            return entry;
+          }
         }
       }
       return null;
     }
 
-    const rawRunHours = parseFloat(getLatestVal('run_hours', 'hourMeter', 'runHours'));
-    const parsedRunHours = isNaN(rawRunHours) ? 0 : rawRunHours;
+    // Ekstraksi timestamp data telemetri terbaru untuk health check 30 detik
+    let maxTs = 0;
+    for (const k in raw) {
+      if (Array.isArray(raw[k]) && raw[k].length > 0 && raw[k][0].ts) {
+        if (raw[k][0].ts > maxTs) maxTs = raw[k][0].ts;
+      }
+    }
+    if (maxTs > 0) {
+      state.lastTelemetryTs = maxTs;
+      updateConnectionHealthBadge(maxTs);
+    }
 
-    const rawMaintDue = parseFloat(getLatestVal('maint_due_h', 'maintenanceDueHours', 'maintDue'));
-    const parsedMaintDue = !isNaN(rawMaintDue) ? rawMaintDue : Math.max(0, 250 - (parsedRunHours % 250));
+    // Helper konversi angka murni tanpa fallback buatan (null jika data belum tersedia)
+    function safeNum(raw) {
+      if (raw === null || raw === undefined || raw === '') return null;
+      const v = parseFloat(raw);
+      return isNaN(v) ? null : v;
+    }
 
-    // Ambil string status maintenance dari payload backend (baik snake_case maupun camelCase)
+    const rawRunHours = safeNum(getLatestVal('run_hours', 'hourMeter', 'runHours'));
+    const rawMaintDue = safeNum(getLatestVal('maint_due_h', 'maintenanceDueHours', 'maintDue'));
     let parsedMaintStatus = getLatestVal('maintenance_status', 'maintenanceStatus', 'maint_status', 'maintStatus');
     if (parsedMaintStatus && typeof parsedMaintStatus === 'string') {
       parsedMaintStatus = parsedMaintStatus.trim();
     } else {
-      // Evaluasi cadangan sesuai Detail Scope v1.1 jika backend tidak mengirimkan field status eksplisit
-      if (parsedMaintDue <= 0) {
-        parsedMaintStatus = 'PERLU SERVIS';
-      } else if (parsedMaintDue <= 20.0) {
-        parsedMaintStatus = 'PERLU SERVIS';
-      } else {
-        parsedMaintStatus = 'SIAP OPERASI';
-      }
+      parsedMaintStatus = null;
     }
 
-    // isNaN guard agar nilai 0 yang valid tidak di-mask oleh fallback
-    function safeNum(raw, fallback) {
-      const v = parseFloat(raw);
-      return isNaN(v) ? fallback : v;
-    }
+    const coolantTemp = safeNum(getLatestVal('coolant_temp_c', 'engine_temp_c', 'temperature'));
+    const battVolt = safeNum(getLatestVal('batt_volt_v', 'battery_v'));
+    const pKw = safeNum(getLatestVal('p_total_kw', 'p_kw'));
+    const sKva = safeNum(getLatestVal('s_total_kva', 's_kva'));
+    const pfAvg = safeNum(getLatestVal('pf_avg', 'pf'));
+    const vL1 = safeNum(getLatestVal('v_l1_n', 'v_l1', 'v_11'));
+    const vL2 = safeNum(getLatestVal('v_l2_n', 'v_l2', 'v_12'));
+    const vL3 = safeNum(getLatestVal('v_l3_n', 'v_l3', 'v_13'));
 
     return {
-      engine_state: getLatestVal('engine_state', 'status') || 'RUNNING',
-      engine_temp_c: safeNum(getLatestVal('engine_temp_c', 'temperature'), 0),
-      temp_status: getLatestVal('temp_status') || 'NORMAL',
-      oil_press_bar: safeNum(getLatestVal('oil_press_bar', 'pressure'), 0),
-      press_status: getLatestVal('press_status') || 'NORMAL',
-      load_pct: safeNum(getLatestVal('load_pct', 'load'), 0),
-      load_status: getLatestVal('load_status') || 'NORMAL',
-      fuel_level_mm: safeNum(getLatestVal('fuel_level_mm', 'fuel_vol_l'), 735.0),
-      fuel_status: getLatestVal('fuel_status') || 'NORMAL',
-      battery_v: safeNum(getLatestVal('battery_v'), 26.8),
-      freq_hz: safeNum(getLatestVal('freq_hz'), 50.0),
-      v_unbal_pct: safeNum(getLatestVal('v_unbal_pct', 'voltage_unbalance', 'unbalance'), 0.6),
-      voltage_balance: getLatestVal('voltage_balance') || 'SEIMBANG (NORMAL)',
-      v_l1: safeNum(getLatestVal('v_l1', 'v_11'), 227.0),
-      v_l2: safeNum(getLatestVal('v_l2', 'v_12'), 227.9),
-      v_l3: safeNum(getLatestVal('v_l3', 'v_13'), 230.0),
-      // v1.1: arus fasa 3-fasa, daya aktif/semu, power factor — null = sensor belum kirim → tampil '--'
-      i_l1: safeNum(getLatestVal('i_l1'), null),
-      i_l2: safeNum(getLatestVal('i_l2'), null),
-      i_l3: safeNum(getLatestVal('i_l3'), null),
-      p_kw: safeNum(getLatestVal('p_kw'), null),
-      s_kva: safeNum(getLatestVal('s_kva'), null),
-      pf: safeNum(getLatestVal('pf'), null),
-      i_unbal_pct: safeNum(getLatestVal('i_unbal_pct'), null),
-      // v1.1: status sensor NAMUR NE43 (string: 'OK' | 'FAULT_LOW' | 'FAULT_HIGH')
+      // A. Engine & Mekanikal
+      engine_state: getLatestVal('engine_state', 'status') || null,
+      eng_speed_rpm: safeNum(getLatestVal('eng_speed_rpm', 'rpm', 'speed')),
+      oil_press_bar: safeNum(getLatestVal('oil_press_bar', 'pressure')),
+      press_status: getLatestVal('press_status') || null,
+      coolant_temp_c: coolantTemp,
+      engine_temp_c: coolantTemp,
+      temp_status: getLatestVal('temp_status') || null,
+      fuel_level_mm: safeNum(getLatestVal('fuel_level_mm', 'fuel_vol_l')),
+      fuel_vol_l: safeNum(getLatestVal('fuel_vol_l')),
+      fuel_status: getLatestVal('fuel_status') || null,
+      batt_volt_v: battVolt,
+      battery_v: battVolt,
+      run_hours: rawRunHours,
+      maint_due_h: rawMaintDue,
+      maintenance_status: parsedMaintStatus,
+      fuel_est_l: safeNum(getLatestVal('fuel_est_l', 'fuelEstimate')),
+
+      // B. Kelistrikan 3-Fasa AC
+      v_l1_n: vL1,
+      v_l2_n: vL2,
+      v_l3_n: vL3,
+      v_l1: vL1,
+      v_l2: vL2,
+      v_l3: vL3,
+      v_l1_l2: safeNum(getLatestVal('v_l1_l2')),
+      v_l2_l3: safeNum(getLatestVal('v_l2_l3')),
+      v_l3_l1: safeNum(getLatestVal('v_l3_l1')),
+      v_unbal_pct: safeNum(getLatestVal('v_unbal_pct', 'voltage_unbalance', 'unbalance')),
+      voltage_balance: getLatestVal('voltage_balance') || null,
+      i_l1: safeNum(getLatestVal('i_l1')),
+      i_l2: safeNum(getLatestVal('i_l2')),
+      i_l3: safeNum(getLatestVal('i_l3')),
+      i_unbal_pct: safeNum(getLatestVal('i_unbal_pct')),
+      i_unbal_avg_15m: safeNum(getLatestVal('i_unbal_avg_15m')),
+      freq_hz: safeNum(getLatestVal('freq_hz')),
+      p_total_kw: pKw,
+      p_kw: pKw,
+      s_total_kva: sKva,
+      s_kva: sKva,
+      load_pct: safeNum(getLatestVal('load_pct', 'load')),
+      load_status: getLatestVal('load_status') || null,
+      pf_avg: pfAvg,
+      pf: pfAvg,
+
+      // C. Hardware Diagnostic & Fault Flags
+      fault_ai1: (getLatestVal('fault_ai1') === true || getLatestVal('fault_ai1') === 'true'),
+      fault_ai2: (getLatestVal('fault_ai2') === true || getLatestVal('fault_ai2') === 'true'),
+      fault_modbus: (getLatestVal('fault_modbus') === true || getLatestVal('fault_modbus') === 'true'),
+      maint_req: (getLatestVal('maint_req') === true || getLatestVal('maint_req') === 'true'),
       ai1_st: getLatestVal('ai1_st') || null,
       ai2_st: getLatestVal('ai2_st') || null,
       ai3_st: getLatestVal('ai3_st') || null,
-      fuel_vol_l: safeNum(getLatestVal('fuel_vol_l'), null),
-      run_hours: parsedRunHours,
-      maint_due_h: parsedMaintDue,
-      maintenance_status: parsedMaintStatus,
-      fuel_est_l: safeNum(getLatestVal('fuel_est_l', 'fuelEstimate'), 0),
       sensor_fault: (getLatestVal('sensor_fault') === true || getLatestVal('sensor_fault') === 'true')
     };
   }
@@ -662,72 +700,85 @@
     // 1. Engine State Machine Dinamis
     renderEngineStateMachine(data.engine_state, data.engine_state_note);
 
-    // Aux metadata (Tegangan Aki VB & Frekuensi Alternator)
-    if (DOM.valBatteryV && data.battery_v !== undefined) {
-      DOM.valBatteryV.textContent = Number(data.battery_v).toFixed(1) + ' V';
+    // Aux metadata (Putaran Mesin RPM, Tegangan Aki VB & Frekuensi Alternator)
+    if (DOM.valEngSpeedRpm) {
+      if (data.eng_speed_rpm !== undefined && data.eng_speed_rpm !== null) {
+        DOM.valEngSpeedRpm.textContent = Math.round(Number(data.eng_speed_rpm));
+      } else if (!data.engine_state || data.engine_state === 'STOPPED') {
+        DOM.valEngSpeedRpm.textContent = '0';
+      } else {
+        DOM.valEngSpeedRpm.textContent = '--';
+      }
     }
-    if (DOM.valFreqHz && data.freq_hz !== undefined) {
-      DOM.valFreqHz.textContent = Number(data.freq_hz).toFixed(1) + ' Hz';
+    if (DOM.valBatteryV) {
+      DOM.valBatteryV.textContent = (data.battery_v !== null && data.battery_v !== undefined)
+        ? Number(data.battery_v).toFixed(1) + ' V' : '-- V';
+    }
+    if (DOM.valFreqHz) {
+      DOM.valFreqHz.textContent = (data.freq_hz !== null && data.freq_hz !== undefined)
+        ? Number(data.freq_hz).toFixed(1) + ' Hz' : '-- Hz';
     }
 
     // update 4 kartu telemetri utama (suhu, oli, level solar, beban)
-    // Guard null: sensor bisa kirim null saat FAULT — tampilkan '--' (v1.1)
     if (DOM.valEngineTemp) {
-      DOM.valEngineTemp.textContent = data.engine_temp_c !== null && data.engine_temp_c !== undefined
+      DOM.valEngineTemp.textContent = (data.engine_temp_c !== null && data.engine_temp_c !== undefined)
         ? Number(data.engine_temp_c).toFixed(1) : '--';
     }
-    updateStatusPill(DOM.pillTempStatus, data.temp_status || 'NORMAL');
 
     if (DOM.valOilPressure) {
-      DOM.valOilPressure.textContent = data.oil_press_bar !== null && data.oil_press_bar !== undefined
+      DOM.valOilPressure.textContent = (data.oil_press_bar !== null && data.oil_press_bar !== undefined)
         ? Number(data.oil_press_bar).toFixed(2) : '--';
     }
-    updateStatusPill(DOM.pillPressStatus, data.press_status || 'NORMAL');
 
-    if (DOM.valFuelLevelMm && data.fuel_level_mm !== undefined) {
-      DOM.valFuelLevelMm.textContent = Math.round(Number(data.fuel_level_mm));
+    if (DOM.valFuelLevelMm) {
+      DOM.valFuelLevelMm.textContent = (data.fuel_level_mm !== null && data.fuel_level_mm !== undefined)
+        ? Math.round(Number(data.fuel_level_mm)) : '--';
     }
-    updateStatusPill(DOM.pillFuelStatus, data.fuel_status || 'NORMAL');
 
-    const loadVal = Number(data.load_pct) || 0;
-    DOM.valLoadPct.textContent = loadVal.toFixed(1);
-    DOM.barLoadPct.style.width = Math.min(Math.max(loadVal, 0), 100) + '%';
-    updateStatusPill(DOM.pillLoadStatus, data.load_status || 'NORMAL');
+    const hasLoad = (data.load_pct !== null && data.load_pct !== undefined);
+    if (DOM.valLoadPct) {
+      DOM.valLoadPct.textContent = hasLoad ? Number(data.load_pct).toFixed(1) : '--';
+    }
+    if (DOM.barLoadPct) {
+      DOM.barLoadPct.style.width = hasLoad ? Math.min(Math.max(Number(data.load_pct), 0), 100) + '%' : '0%';
+    }
+    updateStatusPill(DOM.pillLoadStatus, hasLoad ? (data.load_status || 'NORMAL') : '--');
 
     // 3. Konsistensi Tegangan 3-Fasa & Deviasi NEMA
-    const v1 = Number(data.v_l1 !== undefined ? data.v_l1 : data.v_11 || 0);
-    const v2 = Number(data.v_l2 !== undefined ? data.v_l2 : data.v_12 || 0);
-    const v3 = Number(data.v_l3 !== undefined ? data.v_l3 : data.v_13 || 0);
+    const hasV1 = (data.v_l1 !== null && data.v_l1 !== undefined);
+    const hasV2 = (data.v_l2 !== null && data.v_l2 !== undefined);
+    const hasV3 = (data.v_l3 !== null && data.v_l3 !== undefined);
 
-    DOM.valV11.textContent = v1.toFixed(1);
-    DOM.valV12.textContent = v2.toFixed(1);
-    DOM.valV13.textContent = v3.toFixed(1);
+    DOM.valV11.textContent = hasV1 ? Number(data.v_l1).toFixed(1) : '--';
+    DOM.valV12.textContent = hasV2 ? Number(data.v_l2).toFixed(1) : '--';
+    DOM.valV13.textContent = hasV3 ? Number(data.v_l3).toFixed(1) : '--';
 
-    const unbal = Number(data.v_unbal_pct !== undefined ? data.v_unbal_pct : 0);
+    const hasUnbal = (data.v_unbal_pct !== null && data.v_unbal_pct !== undefined);
     if (DOM.valUnbalPct) {
-      DOM.valUnbalPct.textContent = unbal.toFixed(1) + '%';
+      DOM.valUnbalPct.textContent = hasUnbal ? Number(data.v_unbal_pct).toFixed(1) + '%' : '--%';
     }
 
-    renderNemaVoltageBalance(data.voltage_balance, unbal);
+    renderNemaVoltageBalance(data.voltage_balance, data.v_unbal_pct);
 
     // 4. v1.1: Arus Fasa 3-Fasa (i_l1/2/3)
-    if (DOM.valI1) DOM.valI1.textContent = formatNum(data.i_l1, 2);
-    if (DOM.valI2) DOM.valI2.textContent = formatNum(data.i_l2, 2);
-    if (DOM.valI3) DOM.valI3.textContent = formatNum(data.i_l3, 2);
+    if (DOM.valI1) DOM.valI1.textContent = (data.i_l1 !== null && data.i_l1 !== undefined) ? formatNum(data.i_l1, 2) : '--';
+    if (DOM.valI2) DOM.valI2.textContent = (data.i_l2 !== null && data.i_l2 !== undefined) ? formatNum(data.i_l2, 2) : '--';
+    if (DOM.valI3) DOM.valI3.textContent = (data.i_l3 !== null && data.i_l3 !== undefined) ? formatNum(data.i_l3, 2) : '--';
 
     // 5. v1.1: Daya Aktif, Daya Semu, Power Factor
-    if (DOM.valPKw) DOM.valPKw.textContent = data.p_kw !== null && data.p_kw !== undefined
+    if (DOM.valPKw) DOM.valPKw.textContent = (data.p_kw !== null && data.p_kw !== undefined)
       ? formatNum(data.p_kw, 2) + ' kW' : '--';
-    if (DOM.valSKva) DOM.valSKva.textContent = data.s_kva !== null && data.s_kva !== undefined
+    if (DOM.valSKva) DOM.valSKva.textContent = (data.s_kva !== null && data.s_kva !== undefined)
       ? formatNum(data.s_kva, 2) + ' kVA' : '--';
-    if (DOM.valPf) DOM.valPf.textContent = formatNum(data.pf, 2);
+    if (DOM.valPf) DOM.valPf.textContent = (data.pf !== null && data.pf !== undefined)
+      ? formatNum(data.pf, 2) : '--';
 
-    // 6. v1.1: Ketidakseimbangan Arus NEMA (i_unbal_pct) — badge warna dinamis
+    // 6. v1.1: Ketidakseimbangan Arus NEMA (i_unbal_pct)
     if (DOM.badgeIUnbal) {
       const iu = data.i_unbal_pct;
       if (iu === null || iu === undefined) {
         DOM.badgeIUnbal.textContent = 'ARUS --';
-        DOM.badgeIUnbal.className = 'status-pill-small';
+        DOM.badgeIUnbal.className = 'status-pill-small tier-nodata';
       } else if (Number(iu) > 40) {
         DOM.badgeIUnbal.textContent = 'ARUS KRITIS (>' + Number(iu).toFixed(1) + '%)';
         DOM.badgeIUnbal.className = 'status-pill-small tier-critical';
@@ -742,32 +793,36 @@
 
     // 7. v1.1: Volume Solar (fuel_vol_l)
     if (DOM.valFuelVolL) {
-      DOM.valFuelVolL.textContent = data.fuel_vol_l !== null && data.fuel_vol_l !== undefined
+      DOM.valFuelVolL.textContent = (data.fuel_vol_l !== null && data.fuel_vol_l !== undefined)
         ? '(' + formatNum(data.fuel_vol_l, 1) + ' L)' : '';
     }
 
-    // 8. v1.1: Status Sensor NAMUR NE43 (ai1_st → oli, ai2_st → suhu, ai3_st → solar)
-    renderNamurSensorStatus(DOM.pillPressStatus, data.press_status, data.ai1_st);
-    renderNamurSensorStatus(DOM.pillTempStatus, data.temp_status, data.ai2_st);
-    renderNamurSensorStatus(DOM.pillFuelStatus, data.fuel_status, data.ai3_st);
+    // 8. v1.1: Status Sensor NAMUR NE43 (ai1_st -> oli, ai2_st -> suhu, ai3_st -> solar)
+    renderNamurSensorStatus(DOM.pillPressStatus, data.press_status, data.ai1_st, data.oil_press_bar);
+    renderNamurSensorStatus(DOM.pillTempStatus, data.temp_status, data.ai2_st, data.engine_temp_c);
+    renderNamurSensorStatus(DOM.pillFuelStatus, data.fuel_status, data.ai3_st, data.fuel_level_mm);
   }
 
   // Render status pill dengan override NAMUR NE43 jika sensor fault
-  function renderNamurSensorStatus(pillEl, thresholdStatus, namurStatus) {
+  function renderNamurSensorStatus(pillEl, thresholdStatus, namurStatus, val) {
     if (!pillEl) return;
     const ns = String(namurStatus || '').toUpperCase();
     if (ns === 'FAULT_LOW' || ns === 'FAULT_HIGH') {
       pillEl.textContent = 'SENSOR ' + ns;
       pillEl.className = 'status-pill-small tier-sensor-fault';
+    } else if (val === null || val === undefined) {
+      updateStatusPill(pillEl, '--');
+    } else if (thresholdStatus) {
+      updateStatusPill(pillEl, thresholdStatus);
     } else {
-      updateStatusPill(pillEl, thresholdStatus || 'NORMAL');
+      updateStatusPill(pillEl, 'NORMAL');
     }
   }
 
   function renderEngineStateMachine(rawState, stateNote) {
     if (!DOM.engineStateCard || !DOM.valEngineState) return;
 
-    const stateStr = String(rawState || 'RUNNING').toUpperCase();
+    const stateStr = String(rawState || 'STOPPED').toUpperCase();
     DOM.engineStateCard.className = 'engine-state-card';
 
     let descText = stateNote;
@@ -775,15 +830,15 @@
     if (stateStr === 'RUNNING') {
       DOM.engineStateCard.classList.add('state-running');
       DOM.valEngineState.textContent = 'RUNNING';
-      if (!descText) descText = 'Mesin Beroperasi Nominal • Menyuplai Beban';
+      if (!descText) descText = 'Mesin Beroperasi Nominal — Menyuplai Beban';
     } else if (stateStr === 'STOPPED') {
       DOM.engineStateCard.classList.add('state-stopped');
       DOM.valEngineState.textContent = 'STOPPED';
-      if (!descText) descText = 'Mesin Siaga / Mati • Tidak Menyuplai Beban';
+      if (!descText) descText = 'Mesin Siaga / Mati — Beban Terputus';
     } else if (stateStr === 'STARTING') {
       DOM.engineStateCard.classList.add('state-starting');
       DOM.valEngineState.textContent = 'STARTING';
-      if (!descText) descText = 'Proses Starter Mesin • Sinkronisasi Fasa';
+      if (!descText) descText = 'Proses Starter Mesin — Sinkronisasi Fasa';
     } else if (stateStr === 'STOPPING') {
       DOM.engineStateCard.classList.add('state-stopping');
       DOM.valEngineState.textContent = 'STOPPING';
@@ -791,9 +846,9 @@
     } else if (stateStr === 'FAULT') {
       DOM.engineStateCard.classList.add('state-fault');
       DOM.valEngineState.textContent = 'FAULT';
-      if (!descText) descText = 'Trip Proteksi Aktif • Mesin Berhenti Darurat';
+      if (!descText) descText = 'Trip Proteksi Aktif — Mesin Berhenti Darurat';
     } else {
-      DOM.engineStateCard.classList.add('state-running');
+      DOM.engineStateCard.classList.add('state-stopped');
       DOM.valEngineState.textContent = stateStr;
       if (!descText) descText = 'Status Operasi Terdeteksi';
     }
@@ -805,13 +860,15 @@
 
   function updateStatusPill(element, statusText) {
     if (!element) return;
-    const txt = String(statusText || 'NORMAL').toUpperCase();
+    const txt = String(statusText || '--').toUpperCase();
     element.textContent = txt;
 
     element.className = 'status-pill-small';
-    if (txt === 'NORMAL') {
+    if (txt === '--' || txt === 'NO DATA' || txt === 'UNKNOWN') {
+      element.classList.add('tier-nodata');
+    } else if (txt === 'NORMAL') {
       element.classList.add('tier-normal');
-    } else if (txt === 'MAJOR' || txt === 'WARNING' || txt === 'LOW') {
+    } else if (txt === 'MAJOR' || txt === 'LOW') {
       element.classList.add('tier-major');
     } else if (txt === 'CRITICAL' || txt === 'EMPTY') {
       element.classList.add('tier-critical');
@@ -825,6 +882,12 @@
   // evaluasi status ketidakseimbangan tegangan 3-fasa NEMA (konsolidasi threshold & teks status)
   function renderNemaVoltageBalance(balanceText, unbalancePct) {
     if (!DOM.badgeVoltageBalance || !DOM.textVoltageBalance) return;
+
+    if (unbalancePct === null || unbalancePct === undefined) {
+      DOM.badgeVoltageBalance.className = 'voltage-badge';
+      DOM.textVoltageBalance.textContent = balanceText || 'TEGANGAN --';
+      return;
+    }
 
     const pct = parseFloat(unbalancePct) || 0;
     const up = String(balanceText || '').toUpperCase();
@@ -860,10 +923,10 @@
     const chart = state.chartInstance;
 
     chart.data.labels.push(timeLabel);
-    chart.data.datasets[0].data.push(Number(data.engine_temp_c));
-    chart.data.datasets[1].data.push(Number(data.oil_press_bar));
-    chart.data.datasets[2].data.push(Number(data.load_pct));
-    chart.data.datasets[3].data.push(Number(data.v_l1 !== undefined ? data.v_l1 : data.v_11 || 0));
+    chart.data.datasets[0].data.push(data.engine_temp_c !== null && data.engine_temp_c !== undefined ? Number(data.engine_temp_c) : null);
+    chart.data.datasets[1].data.push(data.oil_press_bar !== null && data.oil_press_bar !== undefined ? Number(data.oil_press_bar) : null);
+    chart.data.datasets[2].data.push(data.load_pct !== null && data.load_pct !== undefined ? Number(data.load_pct) : null);
+    chart.data.datasets[3].data.push(data.v_l1 !== null && data.v_l1 !== undefined ? Number(data.v_l1) : null);
 
     if (chart.data.labels.length > MAX_POINTS) {
       chart.data.labels.shift();
@@ -1323,57 +1386,62 @@
 
     renderOdometerDigits(data.run_hours);
 
-    const dueHours = Number(data.maint_due_h);
-    const displayDue = !isNaN(dueHours) ? dueHours : 0;
-    DOM.valMaintDue.textContent = Math.max(0, displayDue).toFixed(1);
-
-    if (displayDue <= 0) {
-      DOM.textMaintRemaining.textContent = '0.0 Jam (Jatuh Tempo)';
-    } else {
-      DOM.textMaintRemaining.textContent = `Tersisa ${displayDue.toFixed(1)} Jam`;
-    }
-
-    const rawStatus = String(data.maintenance_status || '').trim();
-    let statusText = rawStatus;
-    if (!statusText) {
-      if (displayDue <= 0 || displayDue <= 20.0) {
-        statusText = 'PERLU SERVIS';
+    const hasDue = (data.maint_due_h !== null && data.maint_due_h !== undefined);
+    if (hasDue) {
+      const dueHours = Number(data.maint_due_h);
+      DOM.valMaintDue.textContent = Math.max(0, dueHours).toFixed(1);
+      if (dueHours <= 0) {
+        DOM.textMaintRemaining.textContent = '0.0 Jam (Jatuh Tempo)';
       } else {
-        statusText = 'SIAP OPERASI';
+        DOM.textMaintRemaining.textContent = `Tersisa ${dueHours.toFixed(1)} Jam`;
       }
-    }
-
-    DOM.badgeMaintStatus.textContent = statusText;
-
-    const statusUpper = statusText.toUpperCase();
-    // status servis dievaluasi dari field payload backend; fallback threshold 20 jam
-    if (displayDue <= 0 || statusUpper.includes('OVERDUE') || statusUpper.includes('KRITIS') || statusUpper.includes('TERLAMBAT')) {
-      DOM.badgeMaintStatus.className = 'maint-status-badge badge-maint-critical';
-    } else if (statusUpper.includes('PERLU') || statusUpper.includes('SEGERA') || statusUpper.includes('WARN')) {
-      DOM.badgeMaintStatus.className = 'maint-status-badge badge-maint-warn';
-    } else if (statusUpper.includes('SIAP') || statusUpper.includes('NORMAL') || statusUpper.includes('OK')) {
-      DOM.badgeMaintStatus.className = 'maint-status-badge badge-maint-ok';
-    } else if (displayDue <= 20.0) {
-      DOM.badgeMaintStatus.className = 'maint-status-badge badge-maint-warn';
+      const percentDone = Math.max(0, Math.min(100, ((250 - dueHours) / 250) * 100));
+      DOM.barMaintProgress.style.width = percentDone.toFixed(1) + '%';
+      if (dueHours <= 0) {
+        DOM.barMaintProgress.style.background = 'var(--color-critical)';
+      } else if (dueHours <= 20.0) {
+        DOM.barMaintProgress.style.background = 'var(--color-major)';
+      } else {
+        DOM.barMaintProgress.style.background = 'linear-gradient(90deg, #059669, #3b82f6)';
+      }
     } else {
-      DOM.badgeMaintStatus.className = 'maint-status-badge badge-maint-ok';
+      DOM.valMaintDue.textContent = '--';
+      DOM.textMaintRemaining.textContent = 'Menunggu Data Jam Kerja (NVS ESP32)';
+      DOM.barMaintProgress.style.width = '0%';
     }
 
-    const percentDone = Math.max(0, Math.min(100, ((250 - displayDue) / 250) * 100));
-    DOM.barMaintProgress.style.width = percentDone.toFixed(1) + '%';
-    if (displayDue <= 0) {
-      DOM.barMaintProgress.style.background = 'var(--color-critical)';
-    } else if (displayDue <= 20.0) {
-      DOM.barMaintProgress.style.background = 'var(--color-major)';
+    const rawStatus = data.maintenance_status ? String(data.maintenance_status).trim() : null;
+    if (rawStatus) {
+      const statusUpper = rawStatus.toUpperCase();
+      DOM.badgeMaintStatus.textContent = rawStatus;
+      if (statusUpper.includes('SERVIS') || statusUpper.includes('CRIT') || statusUpper.includes('KADALUARSA')) {
+        DOM.badgeMaintStatus.className = 'maint-status-badge badge-maint-critical';
+      } else if (statusUpper.includes('PERLU') || statusUpper.includes('SEGERA') || statusUpper.includes('WARN')) {
+        DOM.badgeMaintStatus.className = 'maint-status-badge badge-maint-warn';
+      } else {
+        DOM.badgeMaintStatus.className = 'maint-status-badge badge-maint-ok';
+      }
     } else {
-      DOM.barMaintProgress.style.background = 'linear-gradient(90deg, #059669, #3b82f6)';
+      DOM.badgeMaintStatus.textContent = 'BELUM TERDATA';
+      DOM.badgeMaintStatus.className = 'maint-status-badge';
     }
 
-    DOM.valFuelEst.textContent = Number(data.fuel_est_l).toFixed(1);
+    DOM.valFuelEst.textContent = (data.fuel_est_l !== null && data.fuel_est_l !== undefined)
+      ? Number(data.fuel_est_l).toFixed(1) : '--';
   }
 
   function renderOdometerDigits(hours) {
     if (!DOM.odometerDigits) return;
+    if (hours === null || hours === undefined) {
+      let html = '';
+      for (let i = 0; i < 5; i++) {
+        html += '<span class="odo-digit">-</span>';
+      }
+      html += '<span class="odo-dot">.</span>';
+      html += '<span class="odo-digit odo-tenth">-</span>';
+      DOM.odometerDigits.innerHTML = html;
+      return;
+    }
     const num = Math.max(0, Number(hours) || 0);
     const intPart = Math.floor(num);
     const tenthPart = Math.floor((num * 10) % 10);
@@ -1996,7 +2064,7 @@
     initChart();
     updateModeUI();
 
-    const initialFrame = OFFLINE_CAPTURED_DATA.frames[0];
+    const initialFrame = (USE_OFFLINE_DATA || state.currentMode === MODES.OFFLINE) ? (OFFLINE_CAPTURED_DATA.frames && OFFLINE_CAPTURED_DATA.frames[0] || {}) : {};
     renderRealtimePanel(initialFrame);
     renderMaintenancePanel(initialFrame);
 

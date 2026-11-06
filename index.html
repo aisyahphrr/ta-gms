@@ -22,7 +22,7 @@
   <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
 
   <!-- Style Utama SCADA -->
-  <link rel="stylesheet" href="style.css?v=22">
+  <link rel="stylesheet" href="style.css?v=24">
 </head>
 
 <body>
@@ -72,18 +72,9 @@
           </button>
         </div>
 
-        <!-- Indikator Deskripsi Mode / Status Koneksi -->
-        <div class="connection-status-pill" id="connectionStatusBox" title="Klik untuk membuka pengaturan REST API">
-          <span class="conn-value" id="dataSourceText">LIVE REST API (Mastify)</span>
-        </div>
 
-        <!-- Tombol Konfigurasi API Modal -->
-        <button type="button" class="btn-settings-trigger" id="btnOpenSettings" title="Pengaturan REST API &amp; Kredensial">
-          <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-            <circle cx="12" cy="12" r="3"></circle>
-            <path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1 0 2.83 2 2 0 0 1-2.83 0l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-2 2 2 2 0 0 1-2-2v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83 0 2 2 0 0 1 0-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1-2-2 2 2 0 0 1 2-2h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 0-2.83 2 2 0 0 1 2.83 0l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 2-2 2 2 0 0 1 2 2v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 0 2 2 0 0 1 0 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 2 2 2 2 0 0 1-2 2h-.09a1.65 1.65 0 0 0-1.51 1z"></path>
-          </svg>
-        </button>
+        <!-- dataSourceText: hidden, dipakai app.js untuk logging internal saja -->
+        <span id="dataSourceText" style="display:none;"></span>
 
         <!-- Waktu & Polling Timestamp -->
         <div class="header-clock-group">
@@ -112,33 +103,35 @@
       </div>
 
       <div class="realtime-content">
-        <!-- Hero State: Engine State Card Dinamis (RUNNING, STOPPED, STARTING, STOPPING, FAULT) -->
-        <div class="engine-state-card state-running" id="engineStateCard">
+        <!-- Hero State: Engine State Card (compact v1.1) -->
+        <div class="engine-state-card engine-state-card--compact state-stopped" id="engineStateCard">
           <div class="engine-state-header">
             <span class="state-sub">STATUS OPERASIONAL MESIN</span>
             <span class="state-beacon-pulse" id="engineBeacon"></span>
           </div>
           <div class="engine-state-display">
             <div class="state-icon" id="engineStateIcon">
-              <svg width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"
+              <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"
                 stroke-linecap="round" stroke-linejoin="round">
                 <circle cx="12" cy="12" r="3"></circle>
-                <path
-                  d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1 0 2.83 2 2 0 0 1-2.83 0l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-2 2 2 2 0 0 1-2-2v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83 0 2 2 0 0 1 0-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1-2-2 2 2 0 0 1 2-2h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 0-2.83 2 2 0 0 1 2.83 0l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 2-2 2 2 0 0 1 2 2v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 0 2 2 0 0 1 0 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 2 2 2 2 0 0 1-2 2h-.09a1.65 1.65 0 0 0-1.51 1z">
-                </path>
+                <path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1 0 2.83 2 2 0 0 1-2.83 0l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-2 2 2 2 0 0 1-2-2v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83 0 2 2 0 0 1 0-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1-2-2 2 2 0 0 1 2-2h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 0-2.83 2 2 0 0 1 2.83 0l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 2-2 2 2 0 0 1 2 2v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 0 2 2 0 0 1 0 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 2 2 2 2 0 0 1-2 2h-.09a1.65 1.65 0 0 0-1.51 1z"></path>
               </svg>
             </div>
             <div class="state-details">
-              <span class="state-text-primary" id="valEngineState">RUNNING</span>
+              <span class="state-text-primary" id="valEngineState">STOPPED</span>
               <span class="state-note" id="engineStateSub">Operasi Nominal • Beban Terhubung</span>
             </div>
             <div class="engine-aux-meta">
               <div class="aux-meta-badge">
-                <span class="aux-meta-label">AKI GENSET (VB):</span>
+                <span class="aux-meta-label">PUTARAN MESIN (RPM)</span>
+                <span class="aux-meta-val font-mono" id="valEngSpeedRpm">0</span>
+              </div>
+              <div class="aux-meta-badge">
+                <span class="aux-meta-label">AKI GENSET (VB)</span>
                 <span class="aux-meta-val font-mono" id="valBatteryV">--.- V</span>
               </div>
               <div class="aux-meta-badge">
-                <span class="aux-meta-label">FREKUENSI:</span>
+                <span class="aux-meta-label">FREKUENSI (HZ)</span>
                 <span class="aux-meta-val font-mono" id="valFreqHz">--.- Hz</span>
               </div>
             </div>
@@ -157,9 +150,7 @@
               <span class="metric-unit">°C</span>
             </div>
             <div class="card-status-row">
-              <span class="status-pill-small tier-normal" id="pillTempStatus">NORMAL</span>
-            </div>
-            <div class="sensor-channel-row">
+              <span class="status-pill-small tier-nodata" id="pillTempStatus">--</span>
               <span class="sensor-channel">AI2 • PT100</span>
             </div>
           </div>
@@ -174,9 +165,7 @@
               <span class="metric-unit">bar</span>
             </div>
             <div class="card-status-row">
-              <span class="status-pill-small tier-normal" id="pillPressStatus">NORMAL</span>
-            </div>
-            <div class="sensor-channel-row">
+              <span class="status-pill-small tier-nodata" id="pillPressStatus">--</span>
               <span class="sensor-channel">AI1 • 4-20mA</span>
             </div>
           </div>
@@ -192,10 +181,8 @@
               <span class="metric-vol-tag font-mono" id="valFuelVolL"></span>
             </div>
             <div class="card-status-row">
-              <span class="status-pill-small tier-normal" id="pillFuelStatus">NORMAL</span>
-            </div>
-            <div class="sensor-channel-row">
-              <span class="sensor-channel">AI3 • Ref Level Solar</span>
+              <span class="status-pill-small tier-nodata" id="pillFuelStatus">--</span>
+              <span class="sensor-channel">AI3 • Level Solar</span>
             </div>
           </div>
 
@@ -212,9 +199,7 @@
               <div class="card-bar-fill" id="barLoadPct" style="width: 0%;"></div>
             </div>
             <div class="card-status-row">
-              <span class="status-pill-small tier-normal" id="pillLoadStatus">NORMAL</span>
-            </div>
-            <div class="sensor-channel-row">
+              <span class="status-pill-small tier-nodata" id="pillLoadStatus">--</span>
               <span class="sensor-channel">RS485 Modbus</span>
             </div>
           </div>
@@ -225,89 +210,98 @@
           <div class="voltage-header">
             <div class="voltage-title-block">
               <span class="voltage-title">KELISTRIKAN 3-FASA &amp; POWER METER</span>
-              <span class="voltage-sub">RS485 Modbus • NEMA V: <strong id="valUnbalPct">0.0%</strong> • NEMA I: <strong id="valIUnbalPct">0.0%</strong></span>
+              <span class="voltage-sub">RS485 Modbus • NEMA V: <strong id="valUnbalPct">--%</strong> • NEMA I: <strong id="valIUnbalPct">--%</strong></span>
             </div>
             <div class="voltage-badge-group">
-              <div class="voltage-badge badge-nema-normal" id="badgeVoltageBalance">
+              <div class="voltage-badge voltage-badge" id="badgeVoltageBalance">
                 <span class="v-status-dot" id="dotVoltageBalance"></span>
-                <span id="textVoltageBalance">SEIMBANG (NORMAL)</span>
+                <span id="textVoltageBalance">TEGANGAN --</span>
               </div>
-              <span class="status-pill-small tier-normal" id="badgeIUnbal">ARUS SEIMBANG</span>
-            </div>
-          </div>
-
-          <!-- Baris 1: Tegangan Fasa-Netral (v_l1, v_l2, v_l3) -->
-          <div class="phases-grid">
-            <div class="phase-box">
-              <div class="phase-label">FASA R (L1-N) <span class="phase-key">v_l1</span></div>
-              <div class="phase-val-row">
-                <span class="phase-num font-mono" id="valV11">---.--</span>
-                <span class="phase-unit">V</span>
-              </div>
-            </div>
-
-            <div class="phase-box">
-              <div class="phase-label">FASA S (L2-N) <span class="phase-key">v_l2</span></div>
-              <div class="phase-val-row">
-                <span class="phase-num font-mono" id="valV12">---.--</span>
-                <span class="phase-unit">V</span>
-              </div>
-            </div>
-
-            <div class="phase-box">
-              <div class="phase-label">FASA T (L3-N) <span class="phase-key">v_l3</span></div>
-              <div class="phase-val-row">
-                <span class="phase-num font-mono" id="valV13">---.--</span>
-                <span class="phase-unit">V</span>
+              <div class="voltage-badge voltage-badge" id="badgeIUnbal">
+                <span class="v-status-dot"></span>
+                <span>ARUS --</span>
               </div>
             </div>
           </div>
 
-          <!-- Baris 2: Arus Listrik Fasa (i_l1, i_l2, i_l3) -->
-          <div class="phases-grid phases-current-grid">
-            <div class="phase-box">
-              <div class="phase-label">ARUS L1 <span class="phase-key">i_l1</span></div>
-              <div class="phase-val-row">
-                <span class="phase-num font-mono" id="valI1">--.--</span>
-                <span class="phase-unit">A</span>
+          <!-- Split Layout: Fasa & Arus di Kiri, Ringkasan Daya di Kanan (Compact) -->
+          <div class="electrical-split-layout">
+            <div class="electrical-phases-col">
+              <!-- Baris 1: Tegangan Fasa-Netral (v_l1, v_l2, v_l3) -->
+              <div class="phases-grid">
+                <div class="phase-box">
+                  <div class="phase-label">FASA R (L1-N) <span class="phase-key">v_l1</span></div>
+                  <div class="phase-val-row">
+                    <span class="phase-num font-mono" id="valV11">---.--</span>
+                    <span class="phase-unit">V</span>
+                  </div>
+                </div>
+
+                <div class="phase-box">
+                  <div class="phase-label">FASA S (L2-N) <span class="phase-key">v_l2</span></div>
+                  <div class="phase-val-row">
+                    <span class="phase-num font-mono" id="valV12">---.--</span>
+                    <span class="phase-unit">V</span>
+                  </div>
+                </div>
+
+                <div class="phase-box">
+                  <div class="phase-label">FASA T (L3-N) <span class="phase-key">v_l3</span></div>
+                  <div class="phase-val-row">
+                    <span class="phase-num font-mono" id="valV13">---.--</span>
+                    <span class="phase-unit">V</span>
+                  </div>
+                </div>
+              </div>
+
+              <!-- Baris 2: Arus Listrik Fasa (i_l1, i_l2, i_l3) -->
+              <div class="phases-grid phases-current-grid">
+                <div class="phase-box">
+                  <div class="phase-label">ARUS L1 <span class="phase-key">i_l1</span></div>
+                  <div class="phase-val-row">
+                    <span class="phase-num font-mono" id="valI1">--.--</span>
+                    <span class="phase-unit">A</span>
+                  </div>
+                </div>
+
+                <div class="phase-box">
+                  <div class="phase-label">ARUS L2 <span class="phase-key">i_l2</span></div>
+                  <div class="phase-val-row">
+                    <span class="phase-num font-mono" id="valI2">--.--</span>
+                    <span class="phase-unit">A</span>
+                  </div>
+                </div>
+
+                <div class="phase-box">
+                  <div class="phase-label">ARUS L3 <span class="phase-key">i_l3</span></div>
+                  <div class="phase-val-row">
+                    <span class="phase-num font-mono" id="valI3">--.--</span>
+                    <span class="phase-unit">A</span>
+                  </div>
+                </div>
               </div>
             </div>
 
-            <div class="phase-box">
-              <div class="phase-label">ARUS L2 <span class="phase-key">i_l2</span></div>
-              <div class="phase-val-row">
-                <span class="phase-num font-mono" id="valI2">--.--</span>
-                <span class="phase-unit">A</span>
+            <!-- Sisi Kanan: Kolom Ringkas Daya & Power Factor -->
+            <div class="electrical-power-col">
+              <div class="power-col-item">
+                <span class="power-meta-lbl">DAYA AKTIF (P):</span>
+                <span class="power-meta-val font-mono" id="valPKw">--.-- kW</span>
               </div>
-            </div>
-
-            <div class="phase-box">
-              <div class="phase-label">ARUS L3 <span class="phase-key">i_l3</span></div>
-              <div class="phase-val-row">
-                <span class="phase-num font-mono" id="valI3">--.--</span>
-                <span class="phase-unit">A</span>
+              <div class="power-col-item">
+                <span class="power-meta-lbl">DAYA SEMU (S):</span>
+                <span class="power-meta-val font-mono" id="valSKva">--.-- kVA</span>
               </div>
-            </div>
-          </div>
-
-          <!-- Baris 3: Ringkasan Daya & Power Factor -->
-          <div class="phases-power-bar">
-            <div class="power-meta-item">
-              <span class="power-meta-lbl">DAYA AKTIF (P):</span>
-              <span class="power-meta-val font-mono" id="valPKw">--.-- kW</span>
-            </div>
-            <div class="power-meta-item">
-              <span class="power-meta-lbl">DAYA SEMU (S):</span>
-              <span class="power-meta-val font-mono" id="valSKva">--.-- kVA</span>
-            </div>
-            <div class="power-meta-item">
-              <span class="power-meta-lbl">POWER FACTOR:</span>
-              <span class="power-meta-val font-mono" id="valPf">-.--</span>
+              <div class="power-col-item">
+                <span class="power-meta-lbl">POWER FACTOR:</span>
+                <span class="power-meta-val font-mono" id="valPf">-.--</span>
+              </div>
             </div>
           </div>
         </div>
       </div>
     </section>
+
 
     <!-- =======================================================================
          PANEL 2: GRAFIK HISTORI / TIMESERIES (4 PARAMETER STANDAR GMS)
@@ -503,62 +497,11 @@
     </div>
   </footer>
 
-  <!-- =========================================================================
-       MODAL: KONFIGURASI REST API & KREDENSIAL MASTIFY
-       ========================================================================= -->
-  <div class="modal-backdrop hidden" id="settingsModal">
-    <div class="modal-card">
-      <div class="modal-header">
-        <h3 class="modal-title">Konfigurasi REST API Mastify</h3>
-        <button type="button" class="btn-close-modal" id="btnCloseSettings">&times;</button>
-      </div>
 
-      <div class="modal-body">
-        <p class="modal-desc">
-          Konfigurasi koneksi langsung ke backend Mastify (ThingsBoard-based). Jika token JWT kedaluwarsa (HTTP 401),
-          dashboard otomatis melakukan login ulang menggunakan Username &amp; Password di background tanpa reload halaman.
-        </p>
-
-        <div class="form-group">
-          <label class="form-label" for="inputHost">Host Backend Mastify:</label>
-          <input type="text" class="form-control font-mono" id="inputHost"
-            placeholder="http://178.128.107.238:8080">
-        </div>
-
-        <div class="form-group">
-          <label class="form-label" for="inputDeviceId">Target Device UUID:</label>
-          <input type="text" class="form-control font-mono" id="inputDeviceId"
-            placeholder="7150e8b0-c2d0-11f1-b703-2ff028a3ac15">
-        </div>
-
-        <div class="form-row">
-          <div class="form-group form-col">
-            <label class="form-label" for="inputUsername">Username Mastify:</label>
-            <input type="text" class="form-control" id="inputUsername" placeholder="fatina@masch.cc">
-          </div>
-          <div class="form-group form-col">
-            <label class="form-label" for="inputPassword">Password Mastify:</label>
-            <input type="password" class="form-control" id="inputPassword" placeholder="••••••••">
-          </div>
-        </div>
-
-        <div class="form-group">
-          <label class="form-label" for="inputToken">Active JWT Token (Opsional / Manual Override):</label>
-          <textarea class="form-control font-mono" id="inputToken" rows="2"
-            placeholder="Bearer eyJhbGciOiJIUzUxMiJ9..."></textarea>
-          <span class="form-hint">Token disimpan aman di peramban (localStorage).</span>
-        </div>
-      </div>
-
-      <div class="modal-footer">
-        <button type="button" class="btn btn-secondary" id="btnCancelSettings">Batal</button>
-        <button type="button" class="btn btn-primary" id="btnSaveSettings">Simpan &amp; Hubungkan</button>
-      </div>
-    </div>
-  </div>
-
-  <!-- Script Logika Client Dashboard -->
-  <script src="app.js?v=22"></script>
+  <!-- Dataset Laboratorium / Offline Data Lab -->
+  <script src="dataLab.js?v=24"></script>
+  <!-- Core Script Dashboard GMS -->
+  <script src="app.js?v=24"></script>
 </body>
 
 </html>
