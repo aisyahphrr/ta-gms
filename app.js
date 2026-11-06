@@ -23,6 +23,8 @@
     mastifyHost: 'http://178.128.107.238:8080',
     deviceId: '7150e8b0-c2d0-11f1-b703-2ff028a3ac15',
     jwtToken: '',
+    username: '',
+    password: '',
     pollingIntervalMs: 3000
   };
 
@@ -37,7 +39,9 @@
     offlineFrameIndex: 0,
     currentAlarms: [],
     alarmLog: [], // default bersih: Tidak Ada Alarm Aktif (Sistem Normal)
-    activeSimulation: 'normal' // 'normal' | 'temp' | 'oil' | 'voltage' | 'freq'
+    activeSimulation: 'normal', // 'normal' | 'temp' | 'oil' | 'voltage' | 'freq' | 'imbalance' | 'sensor_ai1'
+    username: '',
+    password: ''
   };
 
   // ===========================================================================
@@ -68,7 +72,12 @@
         run_hours: 1284.5,
         maint_due_h: 15.5,
         maintenance_status: 'SIAP OPERASI',
-        fuel_est_l: 344.2
+        fuel_est_l: 344.2,
+        i_l1: 77.7, i_l2: 37.4, i_l3: 39.9,
+        p_kw: 33.4, s_kva: 35.3, pf: 0.94,
+        i_unbal_pct: 18.5,
+        ai1_st: 'OK', ai2_st: 'OK', ai3_st: 'OK',
+        fuel_vol_l: 367.5
       },
       {
         engine_state: 'RUNNING',
@@ -91,7 +100,12 @@
         run_hours: 1284.5,
         maint_due_h: 15.5,
         maintenance_status: 'SIAP OPERASI',
-        fuel_est_l: 344.6
+        fuel_est_l: 344.6,
+        i_l1: 76.9, i_l2: 37.1, i_l3: 39.5,
+        p_kw: 33.0, s_kva: 34.9, pf: 0.94,
+        i_unbal_pct: 18.2,
+        ai1_st: 'OK', ai2_st: 'OK', ai3_st: 'OK',
+        fuel_vol_l: 367.8
       },
       {
         engine_state: 'RUNNING',
@@ -114,7 +128,12 @@
         run_hours: 1284.5,
         maint_due_h: 15.5,
         maintenance_status: 'SIAP OPERASI',
-        fuel_est_l: 345.0
+        fuel_est_l: 345.0,
+        i_l1: 78.2, i_l2: 37.8, i_l3: 40.1,
+        p_kw: 34.1, s_kva: 36.0, pf: 0.95,
+        i_unbal_pct: 18.8,
+        ai1_st: 'OK', ai2_st: 'OK', ai3_st: 'OK',
+        fuel_vol_l: 368.0
       },
       {
         engine_state: 'RUNNING',
@@ -137,7 +156,12 @@
         run_hours: 1284.5,
         maint_due_h: 15.5,
         maintenance_status: 'SIAP OPERASI',
-        fuel_est_l: 345.4
+        fuel_est_l: 345.4,
+        i_l1: 79.0, i_l2: 38.2, i_l3: 40.4,
+        p_kw: 34.5, s_kva: 36.4, pf: 0.95,
+        i_unbal_pct: 18.6,
+        ai1_st: 'OK', ai2_st: 'OK', ai3_st: 'OK',
+        fuel_vol_l: 368.3
       },
       {
         engine_state: 'RUNNING',
@@ -160,7 +184,12 @@
         run_hours: 1284.5,
         maint_due_h: 15.5,
         maintenance_status: 'SIAP OPERASI',
-        fuel_est_l: 345.9
+        fuel_est_l: 345.9,
+        i_l1: 77.5, i_l2: 37.3, i_l3: 39.8,
+        p_kw: 33.3, s_kva: 35.2, pf: 0.94,
+        i_unbal_pct: 18.4,
+        ai1_st: 'OK', ai2_st: 'OK', ai3_st: 'OK',
+        fuel_vol_l: 368.6
       },
       {
         engine_state: 'RUNNING',
@@ -183,7 +212,12 @@
         run_hours: 1284.5,
         maint_due_h: 15.5,
         maintenance_status: 'SIAP OPERASI',
-        fuel_est_l: 346.3
+        fuel_est_l: 346.3,
+        i_l1: 76.8, i_l2: 37.0, i_l3: 39.4,
+        p_kw: 32.9, s_kva: 34.8, pf: 0.94,
+        i_unbal_pct: 18.1,
+        ai1_st: 'OK', ai2_st: 'OK', ai3_st: 'OK',
+        fuel_vol_l: 368.9
       }
     ],
 
@@ -287,6 +321,26 @@
     valUnbalPct: document.getElementById('valUnbalPct'),
     badgeVoltageBalance: document.getElementById('badgeVoltageBalance'),
     textVoltageBalance: document.getElementById('textVoltageBalance'),
+    // v1.1 additions: 3-phase amps, power, current imbalance
+    valI1: document.getElementById('valI1'),
+    valI2: document.getElementById('valI2'),
+    valI3: document.getElementById('valI3'),
+    valPKw: document.getElementById('valPKw'),
+    valSKva: document.getElementById('valSKva'),
+    valPf: document.getElementById('valPf'),
+    badgeIUnbal: document.getElementById('badgeIUnbal'),
+    valFuelVolL: document.getElementById('valFuelVolL'),
+    // v1.1 additions: settings modal
+    btnOpenSettings: document.getElementById('btnOpenSettings'),
+    settingsModal: document.getElementById('settingsModal'),
+    btnCloseSettings: document.getElementById('btnCloseSettings'),
+    btnCancelSettings: document.getElementById('btnCancelSettings'),
+    btnSaveSettings: document.getElementById('btnSaveSettings'),
+    inputHost: document.getElementById('inputHost'),
+    inputDeviceId: document.getElementById('inputDeviceId'),
+    inputUsername: document.getElementById('inputUsername'),
+    inputPassword: document.getElementById('inputPassword'),
+    inputToken: document.getElementById('inputToken'),
 
     // Panel 2: Timeseries Chart & Legend Items
     chartCanvas: document.getElementById('gmsTimeseriesChart'),
@@ -311,6 +365,99 @@
   };
 
   // ===========================================================================
+  // 3b. AXIOS HTTP CLIENT + AUTO RE-LOGIN INTERCEPTOR (v1.1)
+  // apiClient menggantikan raw fetch: semua request telemetri & alarm pakai ini
+  // agar interceptor 401 → auto re-login berjalan transparan tanpa reload
+  // ===========================================================================
+  const apiClient = axios.create({
+    timeout: 5000,
+    headers: { 'Content-Type': 'application/json' }
+  });
+
+  let _isRefreshing = false;
+  let _refreshQueue = [];
+
+  // Tambahkan header Authorization dari state/localStorage ke setiap request
+  apiClient.interceptors.request.use(function (config) {
+    const token = state.config.jwtToken || safeGetStorageEarly('GMS_JWT_TOKEN');
+    if (token && !config.headers['X-Authorization']) {
+      config.headers['X-Authorization'] = token.startsWith('Bearer ') ? token : 'Bearer ' + token;
+    }
+    return config;
+  });
+
+  // Jika respons 401 (token expired): re-login otomatis, lalu ulangi request asli
+  apiClient.interceptors.response.use(null, async function (error) {
+    const orig = error.config;
+    const isLoginEndpoint = orig && (orig.url || '').includes('/auth/login');
+    if (error.response && error.response.status === 401 && orig && !orig._retry && !isLoginEndpoint) {
+      if (_isRefreshing) {
+        // Queue request lain yang datang saat sedang refresh
+        return new Promise(function (resolve, reject) {
+          _refreshQueue.push(function (newToken) {
+            if (!newToken) return reject(error);
+            orig.headers['X-Authorization'] = 'Bearer ' + newToken;
+            resolve(apiClient(orig));
+          });
+        });
+      }
+      orig._retry = true;
+      _isRefreshing = true;
+      try {
+        const newToken = await performLogin();
+        _isRefreshing = false;
+        _refreshQueue.forEach(function (cb) { cb(newToken); });
+        _refreshQueue = [];
+        orig.headers['X-Authorization'] = 'Bearer ' + newToken;
+        return apiClient(orig);
+      } catch (loginErr) {
+        _isRefreshing = false;
+        _refreshQueue.forEach(function (cb) { cb(null); });
+        _refreshQueue = [];
+        if (DOM.dataSourceText) DOM.dataSourceText.textContent = 'Error 401: Token Expired — Buka ⚙️ isi Username & Password';
+        if (DOM.statusDot) DOM.statusDot.className = 'rocker-led error';
+        throw loginErr;
+      }
+    }
+    throw error;
+  });
+
+  // Re-login ke Mastify menggunakan username/password tersimpan
+  async function performLogin() {
+    const user = state.config.username || safeGetStorageEarly('GMS_USERNAME') || '';
+    const pass = state.config.password || safeGetStorageEarly('GMS_PASSWORD') || '';
+    if (!user || !pass) {
+      throw new Error('Kredensial belum diisi. Buka ⚙️ untuk mengisi username & password Mastify.');
+    }
+    const url = getMastifyApiEndpoint('/auth/login');
+    // Gunakan axios biasa (bukan apiClient) agar tidak masuk loop interceptor
+    const res = await axios.post(url, { username: user, password: pass }, {
+      headers: { 'Content-Type': 'application/json' },
+      timeout: 8000
+    });
+    if (!res.data || !res.data.token) throw new Error('Respons login tidak mengandung token.');
+    const newToken = res.data.token;
+    state.config.jwtToken = newToken;
+    safeSetStorageEarly('GMS_JWT_TOKEN', newToken);
+    console.info('[GMS Auth] Token baru berhasil didapat via re-login.');
+    return newToken;
+  }
+
+  // Guard localStorage — perlu versi early sebelum safeGetStorage dideklarasikan di bawah
+  function safeGetStorageEarly(key) {
+    try { return localStorage.getItem(key); } catch (_) { return null; }
+  }
+  function safeSetStorageEarly(key, val) {
+    try { localStorage.setItem(key, val); } catch (_) { /* no-op */ }
+  }
+
+  // Helper: format angka atau tampilkan '--' jika null/undefined/NaN
+  function formatNum(val, dec) {
+    if (val === null || val === undefined || isNaN(Number(val))) return '--';
+    return Number(val).toFixed(dec);
+  }
+
+  // ===========================================================================
   // 4. PEMUATAN KONFIGURASI DARI .env (SAFE VANILLA FETCH)
   // ===========================================================================
     // akses localStorage dibungkus guard agar aman di iframe / private browsing
@@ -328,6 +475,10 @@
     const queryHost = urlParams.get('host');
     const queryDevice = urlParams.get('deviceId') || urlParams.get('device');
 
+    // URL param: ?username= ?password=
+    const queryUsername = urlParams.get('username');
+    const queryPassword = urlParams.get('password');
+
     if (queryToken) {
       state.config.jwtToken = queryToken;
       safeSetStorage('GMS_JWT_TOKEN', queryToken);
@@ -338,6 +489,14 @@
 
     if (queryHost) state.config.mastifyHost = queryHost;
     if (queryDevice) state.config.deviceId = queryDevice;
+
+    // Ambil kredensial dari localStorage (disimpan via modal settings)
+    const cachedUser = safeGetStorage('GMS_USERNAME');
+    const cachedPass = safeGetStorage('GMS_PASSWORD');
+    if (cachedUser) state.config.username = cachedUser;
+    if (cachedPass) state.config.password = cachedPass;
+    if (queryUsername) { state.config.username = queryUsername; safeSetStorage('GMS_USERNAME', queryUsername); }
+    if (queryPassword) { state.config.password = queryPassword; safeSetStorage('GMS_PASSWORD', queryPassword); }
 
     // fetch .env lokal jika tersedia (localhost); 404 wajar saat deploy di cloud
     try {
@@ -357,6 +516,8 @@
         if (key === 'MASTIFY_HOST') state.config.mastifyHost = value;
         if (key === 'MASTIFY_DEVICE_ID') state.config.deviceId = value;
         if (key === 'MASTIFY_JWT_TOKEN' && !state.config.jwtToken) state.config.jwtToken = value;
+        if (key === 'MASTIFY_USERNAME' && value && !state.config.username) state.config.username = value;
+        if (key === 'MASTIFY_PASSWORD' && value && !state.config.password) state.config.password = value;
         if (key === 'POLLING_INTERVAL_MS') state.config.pollingIntervalMs = parseInt(value, 10) || 3000;
       });
     } catch (err) {
@@ -381,6 +542,7 @@
   // 5. REST API TELEMETRY FETCHER (MASTIFY CLOUD)
   // ===========================================================================
   async function fetchMastifyTelemetry() {
+    // Tambahkan keys v1.1: arus fasa, daya, PF, ketidakseimbangan arus, status sensor NAMUR
     const keys = [
       'engine_state', 'status',
       'engine_temp_c', 'temperature', 'temp_status',
@@ -388,6 +550,10 @@
       'load_pct', 'load', 'load_status',
       'v_l1', 'v_l2', 'v_l3', 'v_11', 'v_12', 'v_13', 'voltage',
       'v_unbal_pct', 'voltage_balance',
+      'i_l1', 'i_l2', 'i_l3',
+      'p_kw', 's_kva', 'pf',
+      'i_unbal_pct',
+      'ai1_st', 'ai2_st', 'ai3_st',
       'battery_v',
       'freq_hz',
       'fuel_level_mm', 'fuel_vol_l', 'fuel_status',
@@ -399,42 +565,9 @@
 
     const url = getMastifyApiEndpoint(`/plugins/telemetry/DEVICE/${state.config.deviceId}/values/timeseries?keys=${keys}`);
 
-    const controller = new AbortController();
-    const timeoutId = setTimeout(() => controller.abort(), 4000);
-
-    try {
-      const headers = {
-        'Content-Type': 'application/json'
-      };
-      if (state.config.jwtToken) {
-        headers['X-Authorization'] = state.config.jwtToken.startsWith('Bearer ')
-          ? state.config.jwtToken
-          : `Bearer ${state.config.jwtToken}`;
-      }
-
-      const response = await fetch(url, {
-        method: 'GET',
-        headers: headers,
-        signal: controller.signal
-      });
-
-      clearTimeout(timeoutId);
-
-      if (!response.ok) {
-        // 401 = token expired — tampilkan pesan eksplisit, jangan auto-fallback ke offline
-        if (response.status === 401) {
-          if (DOM.dataSourceText) DOM.dataSourceText.textContent = 'ERROR 401: Token JWT Expired — Perbarui token di URL atau .env';
-          if (DOM.statusDot) DOM.statusDot.className = 'rocker-led error';
-        }
-        throw new Error(`HTTP ${response.status}`);
-      }
-
-      const json = await response.json();
-      return parseMastifyResponse(json);
-    } catch (error) {
-      clearTimeout(timeoutId);
-      throw error;
-    }
+    // Gunakan apiClient (Axios) agar interceptor 401 → auto re-login bekerja
+    const res = await apiClient.get(url);
+    return parseMastifyResponse(res.data);
   }
 
   function parseMastifyResponse(raw) {
@@ -498,6 +631,19 @@
       v_l1: safeNum(getLatestVal('v_l1', 'v_11'), 227.0),
       v_l2: safeNum(getLatestVal('v_l2', 'v_12'), 227.9),
       v_l3: safeNum(getLatestVal('v_l3', 'v_13'), 230.0),
+      // v1.1: arus fasa 3-fasa, daya aktif/semu, power factor — null = sensor belum kirim → tampil '--'
+      i_l1: safeNum(getLatestVal('i_l1'), null),
+      i_l2: safeNum(getLatestVal('i_l2'), null),
+      i_l3: safeNum(getLatestVal('i_l3'), null),
+      p_kw: safeNum(getLatestVal('p_kw'), null),
+      s_kva: safeNum(getLatestVal('s_kva'), null),
+      pf: safeNum(getLatestVal('pf'), null),
+      i_unbal_pct: safeNum(getLatestVal('i_unbal_pct'), null),
+      // v1.1: status sensor NAMUR NE43 (string: 'OK' | 'FAULT_LOW' | 'FAULT_HIGH')
+      ai1_st: getLatestVal('ai1_st') || null,
+      ai2_st: getLatestVal('ai2_st') || null,
+      ai3_st: getLatestVal('ai3_st') || null,
+      fuel_vol_l: safeNum(getLatestVal('fuel_vol_l'), null),
       run_hours: parsedRunHours,
       maint_due_h: parsedMaintDue,
       maintenance_status: parsedMaintStatus,
@@ -525,10 +671,17 @@
     }
 
     // update 4 kartu telemetri utama (suhu, oli, level solar, beban)
-    DOM.valEngineTemp.textContent = Number(data.engine_temp_c).toFixed(1);
+    // Guard null: sensor bisa kirim null saat FAULT — tampilkan '--' (v1.1)
+    if (DOM.valEngineTemp) {
+      DOM.valEngineTemp.textContent = data.engine_temp_c !== null && data.engine_temp_c !== undefined
+        ? Number(data.engine_temp_c).toFixed(1) : '--';
+    }
     updateStatusPill(DOM.pillTempStatus, data.temp_status || 'NORMAL');
 
-    DOM.valOilPressure.textContent = Number(data.oil_press_bar).toFixed(2);
+    if (DOM.valOilPressure) {
+      DOM.valOilPressure.textContent = data.oil_press_bar !== null && data.oil_press_bar !== undefined
+        ? Number(data.oil_press_bar).toFixed(2) : '--';
+    }
     updateStatusPill(DOM.pillPressStatus, data.press_status || 'NORMAL');
 
     if (DOM.valFuelLevelMm && data.fuel_level_mm !== undefined) {
@@ -556,6 +709,59 @@
     }
 
     renderNemaVoltageBalance(data.voltage_balance, unbal);
+
+    // 4. v1.1: Arus Fasa 3-Fasa (i_l1/2/3)
+    if (DOM.valI1) DOM.valI1.textContent = formatNum(data.i_l1, 2);
+    if (DOM.valI2) DOM.valI2.textContent = formatNum(data.i_l2, 2);
+    if (DOM.valI3) DOM.valI3.textContent = formatNum(data.i_l3, 2);
+
+    // 5. v1.1: Daya Aktif, Daya Semu, Power Factor
+    if (DOM.valPKw) DOM.valPKw.textContent = data.p_kw !== null && data.p_kw !== undefined
+      ? formatNum(data.p_kw, 2) + ' kW' : '--';
+    if (DOM.valSKva) DOM.valSKva.textContent = data.s_kva !== null && data.s_kva !== undefined
+      ? formatNum(data.s_kva, 2) + ' kVA' : '--';
+    if (DOM.valPf) DOM.valPf.textContent = formatNum(data.pf, 2);
+
+    // 6. v1.1: Ketidakseimbangan Arus NEMA (i_unbal_pct) — badge warna dinamis
+    if (DOM.badgeIUnbal) {
+      const iu = data.i_unbal_pct;
+      if (iu === null || iu === undefined) {
+        DOM.badgeIUnbal.textContent = 'ARUS --';
+        DOM.badgeIUnbal.className = 'status-pill-small';
+      } else if (Number(iu) > 40) {
+        DOM.badgeIUnbal.textContent = 'ARUS KRITIS (>' + Number(iu).toFixed(1) + '%)';
+        DOM.badgeIUnbal.className = 'status-pill-small tier-critical';
+      } else if (Number(iu) > 20) {
+        DOM.badgeIUnbal.textContent = 'ARUS ASIMETRIS (' + Number(iu).toFixed(1) + '%)';
+        DOM.badgeIUnbal.className = 'status-pill-small tier-major';
+      } else {
+        DOM.badgeIUnbal.textContent = 'ARUS SEIMBANG (' + Number(iu).toFixed(1) + '%)';
+        DOM.badgeIUnbal.className = 'status-pill-small tier-normal';
+      }
+    }
+
+    // 7. v1.1: Volume Solar (fuel_vol_l)
+    if (DOM.valFuelVolL) {
+      DOM.valFuelVolL.textContent = data.fuel_vol_l !== null && data.fuel_vol_l !== undefined
+        ? '(' + formatNum(data.fuel_vol_l, 1) + ' L)' : '';
+    }
+
+    // 8. v1.1: Status Sensor NAMUR NE43 (ai1_st → oli, ai2_st → suhu, ai3_st → solar)
+    renderNamurSensorStatus(DOM.pillPressStatus, data.press_status, data.ai1_st);
+    renderNamurSensorStatus(DOM.pillTempStatus, data.temp_status, data.ai2_st);
+    renderNamurSensorStatus(DOM.pillFuelStatus, data.fuel_status, data.ai3_st);
+  }
+
+  // Render status pill dengan override NAMUR NE43 jika sensor fault
+  function renderNamurSensorStatus(pillEl, thresholdStatus, namurStatus) {
+    if (!pillEl) return;
+    const ns = String(namurStatus || '').toUpperCase();
+    if (ns === 'FAULT_LOW' || ns === 'FAULT_HIGH') {
+      pillEl.textContent = 'SENSOR ' + ns;
+      pillEl.className = 'status-pill-small tier-sensor-fault';
+    } else {
+      updateStatusPill(pillEl, thresholdStatus || 'NORMAL');
+    }
   }
 
   function renderEngineStateMachine(rawState, stateNote) {
@@ -667,35 +873,16 @@
     chart.update('none');
   }
 
-  // polling alarm aktif langsung dari API ThingsBoard / Mastify
+  // polling alarm aktif langsung dari API ThingsBoard / Mastify (v1.1: ACTIVE_UNACK + apiClient)
   async function fetchMastifyAlarms() {
-    const url = getMastifyApiEndpoint(`/alarm/DEVICE/${state.config.deviceId}?pageSize=10&page=0&searchStatus=ACTIVE&sortProperty=createdTime&sortOrder=DESC`);
-    const controller = new AbortController();
-    const timeoutId = setTimeout(() => controller.abort(), 3000);
+    const url = getMastifyApiEndpoint(`/alarm/DEVICE/${state.config.deviceId}?status=ACTIVE_UNACK&pageSize=10&page=0&sortProperty=createdTime&sortOrder=DESC`);
 
     try {
-      const headers = {
-        'Content-Type': 'application/json'
-      };
-      if (state.config.jwtToken) {
-        headers['X-Authorization'] = state.config.jwtToken.startsWith('Bearer ')
-          ? state.config.jwtToken
-          : `Bearer ${state.config.jwtToken}`;
-      }
-
-      const response = await fetch(url, {
-        method: 'GET',
-        headers: headers,
-        signal: controller.signal
-      });
-
-      clearTimeout(timeoutId);
-      if (!response.ok) return null;
-
-      const json = await response.json();
+      const res = await apiClient.get(url);
+      const json = res.data;
 
       const rawList = Array.isArray(json.data) ? json.data : (Array.isArray(json) ? json : []);
-      // Filter ketat: Pastikan alarm yang berstatus CLEARED atau memiliki clearTs tidak dimasukkan
+      // Filter ketat: hindari alarm CLEARED atau sudah ada clearTs
       const activeList = rawList.filter(function (item) {
         const s = String(item.status || '').toUpperCase();
         const isCleared = s.startsWith('CLEARED') || (item.clearTs && item.clearTs > 0);
@@ -709,18 +896,46 @@
           ? new Date(item.createdTime).toLocaleTimeString('id-ID', { hour: '2-digit', minute: '2-digit', second: '2-digit' })
           : new Date().toLocaleTimeString('id-ID', { hour: '2-digit', minute: '2-digit', second: '2-digit' });
 
+        // alarmId: ThingsBoard menyimpan UUID di item.id.id (nested)
+        const alarmId = (item.id && item.id.id) ? item.id.id : (item.id || '');
+
         return {
+          id: alarmId,
           timestamp: timeStr,
           level: normalizeSeverityTier(item.severity),
           ruleType: formatAlarmRuleName(item.type),
           // Mastify jarang kirim details.message saat status Active — fallback ke lookup ALARM_RULE_MAP
           message: (item.details && item.details.message) || getDefaultAlarmMessage(item.type),
-          ruleStatus: item.status || 'ACTIVE'
+          ruleStatus: item.status || 'ACTIVE_UNACK'
         };
       });
     } catch (err) {
-      clearTimeout(timeoutId);
       return null;
+    }
+  }
+
+  // Acknowledge alarm ke Mastify API (POST /api/alarm/{id}/ack)
+  async function acknowledgeAlarm(alarmId) {
+    if (!alarmId) return;
+
+    if (state.currentMode === MODES.OFFLINE) {
+      // Offline: hapus dari state.alarmLog untuk simulasi
+      state.alarmLog = state.alarmLog.filter(function (a) { return a.id !== alarmId && a.ruleType !== alarmId; });
+      renderAlarmSystem([], 'Offline Demo — Alarm Acknowledged (Local)');
+      return;
+    }
+
+    const url = getMastifyApiEndpoint('/alarm/' + alarmId + '/ack');
+    try {
+      await apiClient.post(url, {});
+      console.info('[GMS Alarm] Acknowledge berhasil untuk alarmId:', alarmId);
+      // Re-fetch alarm setelah ack berhasil
+      const freshAlarms = await fetchMastifyAlarms();
+      if (freshAlarms !== null) {
+        renderAlarmSystem(freshAlarms, 'Mastify Alarm API — Setelah Acknowledge');
+      }
+    } catch (err) {
+      console.warn('[GMS Alarm] Gagal acknowledge alarm:', err.message);
     }
   }
 
@@ -737,7 +952,10 @@
     NAMUR:  { code: 'SENSOR_FAULT',  msg: 'Arus loop 4-20mA sensor di luar rentang standar NAMUR NE43.' },
     FUEL:   { code: 'FUEL_LEVEL',    msg: 'Level solar tangki genset di bawah batas aman operasional.' },
     BATT:   { code: 'BATTERY_FAULT', msg: 'Tegangan baterai starter lemah di bawah batas 24.0 V.' },
-    LOAD:   { code: 'LOAD_OVERLOAD', msg: 'Beban genset melebihi kapasitas daya nominal (overload).' },
+    LOAD:   { code: 'LOAD_FAULT',      msg: 'Beban genset melebihi kapasitas daya nominal (overload).' },
+    OVERLOAD: { code: 'LOAD_FAULT',    msg: 'Beban genset melebihi kapasitas daya nominal (overload).' },
+    IMBAL:  { code: 'CURRENT_IMBALANCE', msg: 'Ketidakseimbangan arus 3-fasa melebihi ambang batas NEMA.' },
+    CURREN: { code: 'CURRENT_IMBALANCE', msg: 'Ketidakseimbangan arus 3-fasa melebihi ambang batas NEMA.' },
     ENGINE: { code: 'ENGINE_FAULT',  msg: 'Anomali proteksi engine terdeteksi oleh rule chain.' },
     TRIP:   { code: 'ENGINE_FAULT',  msg: 'Anomali proteksi engine terdeteksi oleh rule chain.' },
     FAULT:  { code: 'ENGINE_FAULT',  msg: 'Anomali proteksi engine terdeteksi oleh rule chain.' }
@@ -1071,17 +1289,33 @@
       const ruleCode = String(alarm.ruleType || 'SYS_EVENT').toUpperCase();
       const statusTextHtml = `<span class="alarm-status-text ${statusInfo.cssClass}">${statusInfo.text}</span>`;
 
+      // v1.1: tombol Acknowledge hanya muncul untuk alarm ACTIVE yang punya id
+      const showAckBtn = isActive && alarm.id && alarm.id !== '';
+      const ackCell = showAckBtn
+        ? `<td class="col-aksi"><button class="btn-alarm-ack" data-alarm-id="${alarm.id}">Acknowledge</button></td>`
+        : `<td class="col-aksi">${statusTextHtml}</td>`;
+
       rows.push(`
         <tr class="${rowHighlightClass}">
-          <td class="alarm-time-cell">${alarm.timestamp} WIB</td>
-          <td><span class="tier-pill ${tierClass}">${tier}</span></td>
+          <td class="alarm-time-cell col-waktu">${alarm.timestamp} WIB</td>
+          <td class="col-tingkatan"><span class="tier-pill ${tierClass}">${tier}</span></td>
           <td><span class="alarm-rule-code">${ruleCode}</span></td>
           <td class="alarm-msg-cell" title="${alarm.message}">${alarm.message}</td>
-          <td>${statusTextHtml}</td>
+          ${ackCell}
         </tr>`);
     });
 
     tbody.innerHTML = rows.join('');
+
+    // Pasang event listener pada setiap tombol Acknowledge yang dirender
+    tbody.querySelectorAll('.btn-alarm-ack').forEach(function (btn) {
+      btn.addEventListener('click', async function () {
+        const id = this.getAttribute('data-alarm-id');
+        this.disabled = true;
+        this.textContent = 'Proses...';
+        await acknowledgeAlarm(id);
+      });
+    });
   }
 
   function renderMaintenancePanel(data) {
@@ -1557,6 +1791,18 @@
     } else if (state.activeSimulation === 'freq') {
       frame.freq_hz = 48.2;
       frame.engine_state_note = 'SIMULASI SIDANG: Deviasi Frekuensi Alternator';
+    } else if (state.activeSimulation === 'imbalance') {
+      // v1.1: Ketidakseimbangan Arus NEMA kritis
+      frame.i_unbal_pct = 48.5;
+      frame.i_l1 = 110.0;
+      frame.i_l2 = 42.0;
+      frame.i_l3 = 38.0;
+      frame.engine_state_note = 'SIMULASI SIDANG: CURRENT_IMBALANCE NEMA Kritis (>40%)';
+    } else if (state.activeSimulation === 'sensor_ai1') {
+      // v1.1: Sensor Fault NAMUR NE43 AI1 (Tekanan Oli)
+      frame.ai1_st = 'FAULT_LOW';
+      frame.oil_press_bar = null; // sensor faulty — tidak ada pembacaan valid
+      frame.engine_state_note = 'SIMULASI SIDANG: SENSOR_FAULT_AI1 — Loop 4-20mA Putus';
     }
 
     return frame;
@@ -1564,7 +1810,7 @@
 
   // trigger skenario simulasi demo sidang (tanpa tombol di web: via Keyboard atau Console)
   window.gmsSimulate = function (scenarioKey) {
-    const valid = ['normal', 'temp', 'oil', 'voltage', 'freq'];
+    const valid = ['normal', 'temp', 'oil', 'voltage', 'freq', 'imbalance', 'sensor_ai1'];
     const key = String(scenarioKey || 'normal').toLowerCase();
     state.activeSimulation = valid.includes(key) ? key : 'normal';
     console.info(`[GMS Demo Simulasi] Skenario aktif: ${state.activeSimulation.toUpperCase()}`);
@@ -1662,6 +1908,8 @@
     // Tekan 2 / P: Low Oil Pressure (Alarm OIL_PRESSURE)
     // Tekan 3 / V: Voltage Fault NEMA (Alarm VOLTAGE_FAULT)
     // Tekan 4 / F: Frequency Trip (Alarm FREQ_FAULT)
+    // Tekan 5 / I: Current Imbalance NEMA >40% (Alarm CURRENT_IMBALANCE) [v1.1]
+    // Tekan 6 / S: Sensor AI1 Fault NAMUR NE43 (Alarm SENSOR_FAULT_AI1) [v1.1]
     // Tekan C    : Clear Alarms (Normalkan semua alarm)
     window.addEventListener('keydown', function (e) {
       // abaikan jika user sedang mengetik di input field
@@ -1672,8 +1920,34 @@
       else if (k === '2' || k === 'p') window.gmsSimulate('oil');
       else if (k === '3' || k === 'v') window.gmsSimulate('voltage');
       else if (k === '4' || k === 'f') window.gmsSimulate('freq');
+      else if (k === '5' || k === 'i') window.gmsSimulate('imbalance');   // v1.1: CURRENT_IMBALANCE
+      else if (k === '6' || k === 's') window.gmsSimulate('sensor_ai1'); // v1.1: SENSOR_FAULT_AI1
       else if (k === 'c') window.gmsSimulate('normal');
     });
+
+    // Settings modal: buka dengan gear button ⚙️
+    if (DOM.btnOpenSettings) {
+      DOM.btnOpenSettings.addEventListener('click', openSettingsModal);
+    }
+    if (DOM.btnCloseSettings) {
+      DOM.btnCloseSettings.addEventListener('click', function () {
+        if (DOM.settingsModal) DOM.settingsModal.classList.add('hidden');
+      });
+    }
+    if (DOM.btnCancelSettings) {
+      DOM.btnCancelSettings.addEventListener('click', function () {
+        if (DOM.settingsModal) DOM.settingsModal.classList.add('hidden');
+      });
+    }
+    if (DOM.btnSaveSettings) {
+      DOM.btnSaveSettings.addEventListener('click', saveSettings);
+    }
+    // Klik backdrop (di luar modal card) menutup modal
+    if (DOM.settingsModal) {
+      DOM.settingsModal.addEventListener('click', function (e) {
+        if (e.target === DOM.settingsModal) DOM.settingsModal.classList.add('hidden');
+      });
+    }
 
     // Cek juga URL parameter ?sim=temp / ?sim=oil untuk kemudahan demo
     try {
@@ -1681,6 +1955,37 @@
       const sim = urlParams.get('sim');
       if (sim) window.gmsSimulate(sim);
     } catch (_) { }
+  }
+
+  function openSettingsModal() {
+    if (!DOM.settingsModal) return;
+    if (DOM.inputHost) DOM.inputHost.value = state.config.mastifyHost || '';
+    if (DOM.inputDeviceId) DOM.inputDeviceId.value = state.config.deviceId || '';
+    if (DOM.inputUsername) DOM.inputUsername.value = safeGetStorage('GMS_USERNAME') || state.config.username || '';
+    if (DOM.inputPassword) DOM.inputPassword.value = safeGetStorage('GMS_PASSWORD') || state.config.password || '';
+    if (DOM.inputToken) DOM.inputToken.value = safeGetStorage('GMS_JWT_TOKEN') || state.config.jwtToken || '';
+    DOM.settingsModal.classList.remove('hidden');
+  }
+
+  function saveSettings() {
+    if (DOM.inputHost && DOM.inputHost.value.trim()) {
+      state.config.mastifyHost = DOM.inputHost.value.trim();
+    }
+    if (DOM.inputDeviceId && DOM.inputDeviceId.value.trim()) {
+      state.config.deviceId = DOM.inputDeviceId.value.trim();
+    }
+    const u = DOM.inputUsername ? DOM.inputUsername.value.trim() : '';
+    const p = DOM.inputPassword ? DOM.inputPassword.value.trim() : '';
+    const t = DOM.inputToken ? DOM.inputToken.value.trim() : '';
+
+    if (u) { state.config.username = u; safeSetStorage('GMS_USERNAME', u); }
+    if (p) { state.config.password = p; safeSetStorage('GMS_PASSWORD', p); }
+    if (t) { state.config.jwtToken = t; safeSetStorage('GMS_JWT_TOKEN', t); }
+
+    if (DOM.settingsModal) DOM.settingsModal.classList.add('hidden');
+    console.info('[GMS Settings] Konfigurasi disimpan. Host:', state.config.mastifyHost, '| DeviceId:', state.config.deviceId);
+    // Langsung coba konek dengan konfigurasi baru
+    if (state.currentMode === MODES.LIVE) executeTelemetryCycle();
   }
 
   async function initApplication() {

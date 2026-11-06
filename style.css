@@ -293,6 +293,12 @@ body {
   animation: pulse-red 1.5s infinite ease-in-out;
 }
 
+.rocker-led.refreshing {
+  background-color: #3b82f6;
+  box-shadow: 0 0 8px #3b82f6;
+  animation: pulse-blue 1s infinite ease-in-out;
+}
+
 .connection-status-pill {
   display: flex;
   align-items: center;
@@ -303,6 +309,33 @@ body {
   font-size: 0.72rem;
   font-weight: 600;
   color: var(--text-muted);
+  cursor: pointer;
+  transition: all 0.2s ease;
+}
+
+.connection-status-pill:hover {
+  background: #f8fafc;
+  border-color: var(--border-medium);
+  color: var(--color-primary);
+}
+
+.btn-settings-trigger {
+  background: #ffffff;
+  border: 1px solid var(--border-subtle);
+  border-radius: var(--radius-sm);
+  padding: 5px;
+  color: var(--text-muted);
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transition: all 0.2s ease;
+}
+
+.btn-settings-trigger:hover {
+  color: var(--color-primary);
+  background: var(--color-primary-light);
+  border-color: var(--color-primary-border);
 }
 
 /* Clock & Last Sync */
@@ -696,6 +729,13 @@ body {
   color: var(--text-muted);
 }
 
+.metric-vol-tag {
+  font-size: 0.68rem;
+  color: var(--text-muted);
+  font-weight: 600;
+  margin-left: 4px;
+}
+
 .card-bar-wrapper {
   height: 4px;
   background: #e2e8f0;
@@ -873,6 +913,56 @@ body {
   font-size: 0.8rem;
   color: var(--text-muted);
   font-weight: 600;
+}
+
+.voltage-badge-group {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.phases-current-grid {
+  margin-top: 8px;
+}
+
+.phases-current-grid .phase-box {
+  background: var(--bg-card-subtle);
+}
+
+.phases-current-grid .phase-num {
+  font-size: 1.35rem;
+}
+
+.phases-power-bar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  background: #ffffff;
+  border: 1px solid var(--border-subtle);
+  border-radius: var(--radius-sm);
+  padding: 8px 14px;
+  margin-top: 8px;
+  gap: 12px;
+  flex-wrap: wrap;
+}
+
+.power-meta-item {
+  display: flex;
+  align-items: baseline;
+  gap: 6px;
+}
+
+.power-meta-lbl {
+  font-size: 0.65rem;
+  font-weight: 700;
+  color: var(--text-muted);
+  letter-spacing: 0.03em;
+}
+
+.power-meta-val {
+  font-size: 0.85rem;
+  font-weight: 700;
+  color: var(--text-main);
 }
 
 /* === PANEL 2: TIMESERIES CHART === */
@@ -1132,6 +1222,36 @@ body {
   min-width: 110px;
   max-width: 110px;
   white-space: nowrap;
+}
+
+.col-aksi {
+  width: 95px;
+  min-width: 95px;
+  max-width: 95px;
+  text-align: center;
+  white-space: nowrap;
+}
+
+.btn-alarm-ack {
+  background: #eff6ff;
+  color: #1d4ed8;
+  border: 1px solid #bfdbfe;
+  padding: 3px 8px;
+  border-radius: 4px;
+  font-size: 0.66rem;
+  font-weight: 700;
+  cursor: pointer;
+  transition: all 0.2s ease;
+}
+
+.btn-alarm-ack:hover {
+  background: #1d4ed8;
+  color: #ffffff;
+}
+
+.btn-alarm-ack:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
 }
 
 .alarm-table td {
@@ -1628,4 +1748,158 @@ body {
   .maintenance-content {
     padding: 8px 12px;
   }
+}
+
+/* =============================================================================
+   MODAL CONFIGURATION DIALOG
+   ============================================================================= */
+.modal-backdrop {
+  position: fixed;
+  top: 0;
+  left: 0;
+  width: 100vw;
+  height: 100vh;
+  background: rgba(15, 23, 42, 0.45);
+  -webkit-backdrop-filter: blur(4px);
+  backdrop-filter: blur(4px);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 1000;
+  padding: 16px;
+}
+
+.modal-backdrop.hidden {
+  display: none !important;
+}
+
+.modal-card {
+  background: #ffffff;
+  border: 1px solid var(--border-medium);
+  border-radius: var(--radius-lg);
+  box-shadow: 0 20px 25px -5px rgba(0, 0, 0, 0.1), 0 8px 10px -6px rgba(0, 0, 0, 0.1);
+  width: 100%;
+  max-width: 520px;
+  overflow: hidden;
+  display: flex;
+  flex-direction: column;
+}
+
+.modal-header {
+  padding: 14px 18px;
+  border-bottom: 1px solid var(--border-subtle);
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+}
+
+.modal-title {
+  font-size: 0.95rem;
+  font-weight: 700;
+  color: var(--text-main);
+}
+
+.btn-close-modal {
+  background: transparent;
+  border: none;
+  font-size: 1.3rem;
+  line-height: 1;
+  color: var(--text-muted);
+  cursor: pointer;
+}
+
+.modal-body {
+  padding: 16px 18px;
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.modal-desc {
+  font-size: 0.74rem;
+  color: var(--text-muted);
+  line-height: 1.4;
+}
+
+.form-group {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.form-row {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 10px;
+}
+
+.form-col {
+  display: flex;
+  flex-direction: column;
+}
+
+.form-label {
+  font-size: 0.7rem;
+  font-weight: 700;
+  color: var(--text-secondary);
+}
+
+.form-control {
+  border: 1px solid var(--border-medium);
+  border-radius: var(--radius-sm);
+  padding: 7px 10px;
+  font-size: 0.76rem;
+  color: var(--text-main);
+  background: #ffffff;
+  outline: none;
+  transition: border-color 0.2s ease, box-shadow 0.2s ease;
+}
+
+.form-control:focus {
+  border-color: var(--color-primary);
+  box-shadow: 0 0 0 2px var(--color-primary-light);
+}
+
+.form-hint {
+  font-size: 0.62rem;
+  color: var(--text-muted);
+}
+
+.modal-footer {
+  padding: 12px 18px;
+  background: #f8fafc;
+  border-top: 1px solid var(--border-subtle);
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 8px;
+}
+
+.btn {
+  padding: 6px 14px;
+  border-radius: var(--radius-sm);
+  font-size: 0.76rem;
+  font-weight: 600;
+  cursor: pointer;
+  border: 1px solid transparent;
+  transition: all 0.2s ease;
+}
+
+.btn-secondary {
+  background: #ffffff;
+  border-color: var(--border-medium);
+  color: var(--text-secondary);
+}
+
+.btn-secondary:hover {
+  background: #f1f5f9;
+}
+
+.btn-primary {
+  background: var(--color-primary);
+  color: #ffffff;
+}
+
+.btn-primary:hover {
+  background: var(--color-primary-hover);
 }

@@ -15,11 +15,14 @@
     href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;500;600;700&family=Plus+Jakarta+Sans:wght@400;500;600;700;800&display=swap"
     rel="stylesheet">
 
+  <!-- Axios CDN untuk HTTP Client & Interceptor Otomatis Token Refresh -->
+  <script src="https://cdn.jsdelivr.net/npm/axios/dist/axios.min.js"></script>
+
   <!-- Chart.js CDN untuk Grafik Histori Timeseries -->
   <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
 
   <!-- Style Utama SCADA -->
-  <link rel="stylesheet" href="style.css?v=20">
+  <link rel="stylesheet" href="style.css?v=22">
 </head>
 
 <body>
@@ -32,7 +35,7 @@
             stroke-linecap="round" stroke-linejoin="round">
             <!-- Stator Frame & Rotor Air Gap -->
             <circle cx="12" cy="12" r="9.5" />
-            <circle cx="12" cy="12" r="5" stroke-dasharray="2.5 2" />
+            <circle cx="12" cy="5" stroke-dasharray="2.5 2" />
             <!-- 3-Phase Stator Windings (120 derajat) -->
             <path d="M12 2.5v3.5" />
             <path d="M4.64 16.25l3.03-1.75" />
@@ -50,11 +53,11 @@
             <h1 class="brand-title">GENSET MONITORING SYSTEM</h1>
             <span class="badge-scope">READ-ONLY HMI</span>
           </div>
-          <p class="brand-subtitle">D4 Teknologi Rekayasa Komputer IPB • FreeRTOS & 4-20 mA Signal Chain</p>
+          <p class="brand-subtitle">D4 Teknologi Rekayasa Komputer IPB • FreeRTOS &amp; 4-20 mA Signal Chain</p>
         </div>
       </div>
 
-      <!-- Kontrol Mode Operasi & Clock) -->
+      <!-- Kontrol Mode Operasi, Status & Clock -->
       <div class="header-controls">
         <div class="industrial-rocker-switch" id="modeSegmentedControl" role="group" aria-label="Mode Operasi">
           <button type="button" class="rocker-btn active" id="btnModeLive" data-mode="LIVE"
@@ -70,10 +73,17 @@
         </div>
 
         <!-- Indikator Deskripsi Mode / Status Koneksi -->
-        <div class="connection-status-pill hidden" id="connectionStatusBox">
+        <div class="connection-status-pill" id="connectionStatusBox" title="Klik untuk membuka pengaturan REST API">
           <span class="conn-value" id="dataSourceText">LIVE REST API (Mastify)</span>
         </div>
 
+        <!-- Tombol Konfigurasi API Modal -->
+        <button type="button" class="btn-settings-trigger" id="btnOpenSettings" title="Pengaturan REST API &amp; Kredensial">
+          <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+            <circle cx="12" cy="12" r="3"></circle>
+            <path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1 0 2.83 2 2 0 0 1-2.83 0l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-2 2 2 2 0 0 1-2-2v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83 0 2 2 0 0 1 0-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1-2-2 2 2 0 0 1 2-2h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 0-2.83 2 2 0 0 1 2.83 0l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 2-2 2 2 0 0 1 2 2v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 0 2 2 0 0 1 0 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 2 2 2 2 0 0 1-2 2h-.09a1.65 1.65 0 0 0-1.51 1z"></path>
+          </svg>
+        </button>
 
         <!-- Waktu & Polling Timestamp -->
         <div class="header-clock-group">
@@ -90,7 +100,7 @@
   <main class="dashboard-grid">
 
     <!-- =======================================================================
-         PANEL 1: STATUS & NILAI REAL-TIME
+         PANEL 1: STATUS & NILAI REAL-TIME (TELEMETRI INTI & KELISTRIKAN 3-FASA)
          ======================================================================= -->
     <section class="panel panel-realtime" id="panel-realtime" aria-labelledby="heading-realtime">
       <div class="panel-header">
@@ -135,7 +145,7 @@
           </div>
         </div>
 
-        <!-- 4 Telemetry Cards -->
+        <!-- 4 Telemetry Cards Utama -->
         <div class="telemetry-cards-row">
           <!-- Card 1: Suhu Coolant (AI2 • PT100) -->
           <div class="telemetry-card">
@@ -179,6 +189,7 @@
             <div class="card-main">
               <span class="metric-value font-mono" id="valFuelLevelMm">---</span>
               <span class="metric-unit">mm</span>
+              <span class="metric-vol-tag font-mono" id="valFuelVolL"></span>
             </div>
             <div class="card-status-row">
               <span class="status-pill-small tier-normal" id="pillFuelStatus">NORMAL</span>
@@ -209,25 +220,28 @@
           </div>
         </div>
 
-        <!-- 3-Phase Voltage Consistency Block -->
+        <!-- 3-Phase Voltage & Power Consistency Block (Power Meter RS485 Modbus) -->
         <div class="voltage-consistency-card">
           <div class="voltage-header">
             <div class="voltage-title-block">
-              <span class="voltage-title">KONSISTENSI TEGANGAN 3-FASA</span>
-              <span class="voltage-sub">Pengukuran Modbus RS485 • Deviasi NEMA: <strong
-                  id="valUnbalPct">0.0%</strong></span>
+              <span class="voltage-title">KELISTRIKAN 3-FASA &amp; POWER METER</span>
+              <span class="voltage-sub">RS485 Modbus • NEMA V: <strong id="valUnbalPct">0.0%</strong> • NEMA I: <strong id="valIUnbalPct">0.0%</strong></span>
             </div>
-            <div class="voltage-badge badge-nema-normal" id="badgeVoltageBalance">
-              <span class="v-status-dot" id="dotVoltageBalance"></span>
-              <span id="textVoltageBalance">SEIMBANG (NORMAL)</span>
+            <div class="voltage-badge-group">
+              <div class="voltage-badge badge-nema-normal" id="badgeVoltageBalance">
+                <span class="v-status-dot" id="dotVoltageBalance"></span>
+                <span id="textVoltageBalance">SEIMBANG (NORMAL)</span>
+              </div>
+              <span class="status-pill-small tier-normal" id="badgeIUnbal">ARUS SEIMBANG</span>
             </div>
           </div>
 
+          <!-- Baris 1: Tegangan Fasa-Netral (v_l1, v_l2, v_l3) -->
           <div class="phases-grid">
             <div class="phase-box">
               <div class="phase-label">FASA R (L1-N) <span class="phase-key">v_l1</span></div>
               <div class="phase-val-row">
-                <span class="phase-num font-mono" id="valV11">---.-</span>
+                <span class="phase-num font-mono" id="valV11">---.--</span>
                 <span class="phase-unit">V</span>
               </div>
             </div>
@@ -235,7 +249,7 @@
             <div class="phase-box">
               <div class="phase-label">FASA S (L2-N) <span class="phase-key">v_l2</span></div>
               <div class="phase-val-row">
-                <span class="phase-num font-mono" id="valV12">---.-</span>
+                <span class="phase-num font-mono" id="valV12">---.--</span>
                 <span class="phase-unit">V</span>
               </div>
             </div>
@@ -243,9 +257,52 @@
             <div class="phase-box">
               <div class="phase-label">FASA T (L3-N) <span class="phase-key">v_l3</span></div>
               <div class="phase-val-row">
-                <span class="phase-num font-mono" id="valV13">---.-</span>
+                <span class="phase-num font-mono" id="valV13">---.--</span>
                 <span class="phase-unit">V</span>
               </div>
+            </div>
+          </div>
+
+          <!-- Baris 2: Arus Listrik Fasa (i_l1, i_l2, i_l3) -->
+          <div class="phases-grid phases-current-grid">
+            <div class="phase-box">
+              <div class="phase-label">ARUS L1 <span class="phase-key">i_l1</span></div>
+              <div class="phase-val-row">
+                <span class="phase-num font-mono" id="valI1">--.--</span>
+                <span class="phase-unit">A</span>
+              </div>
+            </div>
+
+            <div class="phase-box">
+              <div class="phase-label">ARUS L2 <span class="phase-key">i_l2</span></div>
+              <div class="phase-val-row">
+                <span class="phase-num font-mono" id="valI2">--.--</span>
+                <span class="phase-unit">A</span>
+              </div>
+            </div>
+
+            <div class="phase-box">
+              <div class="phase-label">ARUS L3 <span class="phase-key">i_l3</span></div>
+              <div class="phase-val-row">
+                <span class="phase-num font-mono" id="valI3">--.--</span>
+                <span class="phase-unit">A</span>
+              </div>
+            </div>
+          </div>
+
+          <!-- Baris 3: Ringkasan Daya & Power Factor -->
+          <div class="phases-power-bar">
+            <div class="power-meta-item">
+              <span class="power-meta-lbl">DAYA AKTIF (P):</span>
+              <span class="power-meta-val font-mono" id="valPKw">--.-- kW</span>
+            </div>
+            <div class="power-meta-item">
+              <span class="power-meta-lbl">DAYA SEMU (S):</span>
+              <span class="power-meta-val font-mono" id="valSKva">--.-- kVA</span>
+            </div>
+            <div class="power-meta-item">
+              <span class="power-meta-lbl">POWER FACTOR:</span>
+              <span class="power-meta-val font-mono" id="valPf">-.--</span>
             </div>
           </div>
         </div>
@@ -303,9 +360,9 @@
       <div class="panel-header">
         <div class="panel-title-group">
           <div class="panel-badge-num">03</div>
-          <h2 class="panel-title" id="heading-alarms">Sistem Alarm & Monitoring Rule</h2>
+          <h2 class="panel-title" id="heading-alarms">Sistem Alarm &amp; Monitoring Rule</h2>
         </div>
-        <span class="panel-meta-tag">Evaluasi Mastify Rule Chain</span>
+        <span class="panel-meta-tag">Evaluasi Mastify Rule Chain (3-Tier)</span>
       </div>
 
       <div class="alarms-content">
@@ -314,10 +371,10 @@
             <thead>
               <tr>
                 <th class="col-waktu">WAKTU</th>
-                <th class="col-tingkatan">TINGKATAN</th>
+                <th class="col-tingkatan">SEVERITY</th>
                 <th class="col-jenis">JENIS ALARM</th>
                 <th class="col-pesan">PESAN ALARM</th>
-                <th class="col-status">STATUS</th>
+                <th class="col-aksi">AKSI</th>
               </tr>
             </thead>
             <tbody id="alarmsTableBody">
@@ -334,7 +391,7 @@
         </div>
 
         <div class="alarm-table-footer">
-          <span class="alarm-source-indicator" id="alarmSourceNote">Evaluasi: Real-Time Telemetry Rule Chain</span>
+          <span class="alarm-source-indicator" id="alarmSourceNote">Endpoint: /api/alarm/DEVICE/... (ACTIVE_UNACK)</span>
           <span class="alarm-count-indicator" id="alarmActiveCountText">0 Alarm Aktif</span>
         </div>
       </div>
@@ -347,9 +404,9 @@
       <div class="panel-header">
         <div class="panel-title-group">
           <div class="panel-badge-num">04</div>
-          <h2 class="panel-title" id="heading-maintenance">Hour Meter & Status Maintenance</h2>
+          <h2 class="panel-title" id="heading-maintenance">Hour Meter &amp; Status Maintenance</h2>
         </div>
-        <span class="panel-meta-tag">Akumulasi NVS Flash & Estimasi SFC</span>
+        <span class="panel-meta-tag">Akumulasi NVS Flash &amp; Estimasi SFC</span>
       </div>
 
       <div class="maintenance-content">
@@ -428,26 +485,80 @@
   </main>
 
   <!-- =========================================================================
-       FOOTER (METADATA ARSITEKTUR ZERO-LOGIC CLIENT)
+       FOOTER
        ========================================================================= -->
   <footer class="gms-footer">
     <div class="footer-inner">
       <div class="footer-left">
-        <strong>Tugas Akhir:</strong> Genset Monitoring System (GMS) 3-Fasa Industri • ESP32-S3 Telemetry Engine &
+        <strong>Tugas Akhir:</strong> Genset Monitoring System (GMS) 3-Fasa Industri • ESP32-S3 Telemetry Engine &amp;
         Mastify IoT Cloud.
       </div>
       <div class="footer-right">
         <span class="footer-spec">Arsitektur: Read-Only Client</span>
         <span class="footer-divider">•</span>
-        <span class="footer-spec">Zero Logic in Frontend</span>
+        <span class="footer-spec">HTTP Interceptor Auto-Refresh</span>
         <span class="footer-divider">•</span>
         <span class="footer-spec">2-Mode Operation (Live / Offline)</span>
       </div>
     </div>
   </footer>
 
+  <!-- =========================================================================
+       MODAL: KONFIGURASI REST API & KREDENSIAL MASTIFY
+       ========================================================================= -->
+  <div class="modal-backdrop hidden" id="settingsModal">
+    <div class="modal-card">
+      <div class="modal-header">
+        <h3 class="modal-title">Konfigurasi REST API Mastify</h3>
+        <button type="button" class="btn-close-modal" id="btnCloseSettings">&times;</button>
+      </div>
+
+      <div class="modal-body">
+        <p class="modal-desc">
+          Konfigurasi koneksi langsung ke backend Mastify (ThingsBoard-based). Jika token JWT kedaluwarsa (HTTP 401),
+          dashboard otomatis melakukan login ulang menggunakan Username &amp; Password di background tanpa reload halaman.
+        </p>
+
+        <div class="form-group">
+          <label class="form-label" for="inputHost">Host Backend Mastify:</label>
+          <input type="text" class="form-control font-mono" id="inputHost"
+            placeholder="http://178.128.107.238:8080">
+        </div>
+
+        <div class="form-group">
+          <label class="form-label" for="inputDeviceId">Target Device UUID:</label>
+          <input type="text" class="form-control font-mono" id="inputDeviceId"
+            placeholder="7150e8b0-c2d0-11f1-b703-2ff028a3ac15">
+        </div>
+
+        <div class="form-row">
+          <div class="form-group form-col">
+            <label class="form-label" for="inputUsername">Username Mastify:</label>
+            <input type="text" class="form-control" id="inputUsername" placeholder="fatina@masch.cc">
+          </div>
+          <div class="form-group form-col">
+            <label class="form-label" for="inputPassword">Password Mastify:</label>
+            <input type="password" class="form-control" id="inputPassword" placeholder="••••••••">
+          </div>
+        </div>
+
+        <div class="form-group">
+          <label class="form-label" for="inputToken">Active JWT Token (Opsional / Manual Override):</label>
+          <textarea class="form-control font-mono" id="inputToken" rows="2"
+            placeholder="Bearer eyJhbGciOiJIUzUxMiJ9..."></textarea>
+          <span class="form-hint">Token disimpan aman di peramban (localStorage).</span>
+        </div>
+      </div>
+
+      <div class="modal-footer">
+        <button type="button" class="btn btn-secondary" id="btnCancelSettings">Batal</button>
+        <button type="button" class="btn btn-primary" id="btnSaveSettings">Simpan &amp; Hubungkan</button>
+      </div>
+    </div>
+  </div>
+
   <!-- Script Logika Client Dashboard -->
-  <script src="app.js?v=20"></script>
+  <script src="app.js?v=22"></script>
 </body>
 
 </html>

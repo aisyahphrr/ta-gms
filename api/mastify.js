@@ -2,6 +2,7 @@
  * Vercel Serverless Function: Mastify Reverse Proxy
  * Menghubungkan Frontend HTTPS (Vercel) ke Backend Mastify IoT (HTTP 178.128.107.238:8080)
  * Mengatasi 100% masalah Mixed Content (HTTPS -> HTTP) & CORS di browser.
+ * Mendukung GET, POST (login/ack), dan meneruskan token autentikasi.
  */
 
 export default async function handler(req, res) {
@@ -26,7 +27,7 @@ export default async function handler(req, res) {
     if (!endpoint) {
       return res.status(400).json({
         error: 'Bad Request',
-        message: 'Parameter "endpoint" wajib disertakan. Contoh: /api/mastify?endpoint=/alarm/DEVICE/...'
+        message: 'Parameter "endpoint" wajib disertakan. Contoh: /api/mastify?endpoint=/plugins/telemetry/...'
       });
     }
 
@@ -44,31 +45,42 @@ export default async function handler(req, res) {
     }
 
     // 3. Teruskan Header Otentikasi (X-Authorization)
-    // Prioritas 1: Gunakan token rahasia dari Environment Variable Vercel (MASTIFY_JWT_TOKEN)
-    // Prioritas 2: Fallback ke header otentikasi dari request client jika ada
+    // Prioritas 1: Token dari header client (misal hasil POST login dinamis)
+    // Prioritas 2: Fallback token rahasia environment variable (MASTIFY_JWT_TOKEN)
     const forwardHeaders = {
       'Accept': 'application/json'
     };
 
-    const serverToken = process.env.MASTIFY_JWT_TOKEN;
     const clientAuth = req.headers['x-authorization'] || req.headers['authorization'];
+    const serverToken = process.env.MASTIFY_JWT_TOKEN;
 
-    if (serverToken) {
-      forwardHeaders['X-Authorization'] = serverToken.startsWith('Bearer ')
-        ? serverToken
-        : `Bearer ${serverToken}`;
-    } else if (clientAuth) {
+    if (clientAuth) {
       forwardHeaders['X-Authorization'] = clientAuth.startsWith('Bearer ')
         ? clientAuth
         : `Bearer ${clientAuth}`;
+    } else if (serverToken) {
+      forwardHeaders['X-Authorization'] = serverToken.startsWith('Bearer ')
+        ? serverToken
+        : `Bearer ${serverToken}`;
+    }
+
+    // Teruskan Content-Type dan Body jika bukan GET/HEAD
+    const fetchOptions = {
+      method: req.method,
+      headers: forwardHeaders
+    };
+
+    if (req.method !== 'GET' && req.method !== 'HEAD') {
+      const contentType = req.headers['content-type'] || 'application/json';
+      forwardHeaders['Content-Type'] = contentType;
+
+      if (req.body) {
+        fetchOptions.body = typeof req.body === 'object' ? JSON.stringify(req.body) : req.body;
+      }
     }
 
     // 4. Lakukan request ke server Mastify via Node.js fetch (bebas Mixed Content)
-    const response = await fetch(targetUrl.toString(), {
-      method: req.method,
-      headers: forwardHeaders
-    });
-
+    const response = await fetch(targetUrl.toString(), fetchOptions);
     const responseBody = await response.text();
 
     res.status(response.status);
