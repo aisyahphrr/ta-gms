@@ -14,6 +14,9 @@
   // ===========================================================================
   // 1. DEFINISI MODE & DEFAULT CONFIGURATION
   // ===========================================================================
+  const USE_OFFLINE_DATA = false; // true = pakai dataLab.js, false = fetch dari Mastify API
+  if (typeof window !== 'undefined') window.USE_OFFLINE_DATA = USE_OFFLINE_DATA;
+
   const MODES = {
     LIVE: 'LIVE',
     OFFLINE: 'OFFLINE'
@@ -21,10 +24,11 @@
 
   const DEFAULT_CONFIG = {
     mastifyHost: 'http://178.128.107.238:8080',
-    deviceId: '7150e8b0-c2d0-11f1-b703-2ff028a3ac15',
+    deviceId: '8e725dc0-d9af-11f1-b703-2ff028a3ac15',
     jwtToken: '',
-    username: '',
-    password: '',
+    refreshToken: '',
+    username: 'fatina@masch.cc',
+    password: 'masch33!',
     pollingIntervalMs: 3000
   };
 
@@ -51,7 +55,7 @@
   const OFFLINE_CAPTURED_DATA = {
     // Snapshot telemetri berputar siklik untuk demo sidang
     frames: [
-            {
+      {
         engine_state: 'RUNNING',
         engine_state_note: 'Mesin Beroperasi Nominal • Menyuplai Beban',
         engine_temp_c: 83.4,
@@ -418,7 +422,7 @@
         _isRefreshing = false;
         _refreshQueue.forEach(function (cb) { cb(null); });
         _refreshQueue = [];
-        if (DOM.dataSourceText) DOM.dataSourceText.textContent = 'Error 401: Token Expired — Buka ⚙️ isi Username & Password';
+        if (DOM.dataSourceText) DOM.dataSourceText.textContent = 'Autentikasi Mastify Gagal';
         if (DOM.statusDot) DOM.statusDot.className = 'rocker-led error';
         throw loginErr;
       }
@@ -426,24 +430,28 @@
     throw error;
   });
 
-  // Re-login ke Mastify menggunakan username/password tersimpan
+  // Re-login otomatis ke Mastify di background tanpa intervensi user
   async function performLogin() {
-    const user = state.config.username || safeGetStorageEarly('GMS_USERNAME') || '';
-    const pass = state.config.password || safeGetStorageEarly('GMS_PASSWORD') || '';
+    const user = state.config.username || safeGetStorageEarly('GMS_USERNAME') || DEFAULT_CONFIG.username || 'fatina@masch.cc';
+    const pass = state.config.password || safeGetStorageEarly('GMS_PASSWORD') || DEFAULT_CONFIG.password || 'masch33!';
     if (!user || !pass) {
-      throw new Error('Kredensial belum diisi. Buka ⚙️ untuk mengisi username & password Mastify.');
+      throw new Error('Kredensial Mastify belum terkonfigurasi.');
     }
     const url = getMastifyApiEndpoint('/auth/login');
     // Gunakan axios biasa (bukan apiClient) agar tidak masuk loop interceptor
     const res = await axios.post(url, { username: user, password: pass }, {
       headers: { 'Content-Type': 'application/json' },
-      timeout: 8000
+      timeout: 10000
     });
     if (!res.data || !res.data.token) throw new Error('Respons login tidak mengandung token.');
     const newToken = res.data.token;
     state.config.jwtToken = newToken;
+    if (res.data.refreshToken) {
+      state.config.refreshToken = res.data.refreshToken;
+      safeSetStorageEarly('GMS_REFRESH_TOKEN', res.data.refreshToken);
+    }
     safeSetStorageEarly('GMS_JWT_TOKEN', newToken);
-    console.info('[GMS Auth] Token baru berhasil didapat via re-login.');
+    console.info('[GMS Auth] Token JWT baru berhasil didapat via re-login di background.');
     return newToken;
   }
 
@@ -462,9 +470,9 @@
   }
 
   // ===========================================================================
-  // 4. PEMUATAN KONFIGURASI DARI .env (SAFE VANILLA FETCH)
+  // 4. PEMUATAN KONFIGURASI DARI .env 
   // ===========================================================================
-    // akses localStorage dibungkus guard agar aman di iframe / private browsing
+  // akses localStorage dibungkus guard agar aman di iframe / private browsing
   function safeGetStorage(key) {
     try { return localStorage.getItem(key); } catch (_) { return null; }
   }
@@ -502,30 +510,45 @@
     if (queryUsername) { state.config.username = queryUsername; safeSetStorage('GMS_USERNAME', queryUsername); }
     if (queryPassword) { state.config.password = queryPassword; safeSetStorage('GMS_PASSWORD', queryPassword); }
 
-    // fetch .env lokal jika tersedia (localhost); 404 wajar saat deploy di cloud
+    // Fallback default kredensial proyek jika tidak ada di storage/query
+    if (!state.config.username) state.config.username = DEFAULT_CONFIG.username;
+    if (!state.config.password) state.config.password = DEFAULT_CONFIG.password;
+    if (!state.config.deviceId) state.config.deviceId = DEFAULT_CONFIG.deviceId;
+    if (!state.config.mastifyHost) state.config.mastifyHost = DEFAULT_CONFIG.mastifyHost;
+
+    // fetch .env lokal jika tersedia (localhost); 404 wajar saat deploy di cloud/Vercel
     try {
       const response = await fetch('./.env', { cache: 'no-store' });
-      if (!response.ok) return;
-      const text = await response.text();
+      if (response.ok) {
+        const text = await response.text();
+        text.split('\n').forEach(function (line) {
+          const trimmed = line.trim();
+          if (!trimmed || trimmed.startsWith('#')) return;
+          const separatorIdx = trimmed.indexOf('=');
+          if (separatorIdx === -1) return;
 
-      text.split('\n').forEach(function (line) {
-        const trimmed = line.trim();
-        if (!trimmed || trimmed.startsWith('#')) return;
-        const separatorIdx = trimmed.indexOf('=');
-        if (separatorIdx === -1) return;
+          const key = trimmed.substring(0, separatorIdx).trim();
+          const value = trimmed.substring(separatorIdx + 1).trim();
 
-        const key = trimmed.substring(0, separatorIdx).trim();
-        const value = trimmed.substring(separatorIdx + 1).trim();
+          if (key === 'MASTIFY_HOST') state.config.mastifyHost = value;
+          if (key === 'MASTIFY_DEVICE_ID') state.config.deviceId = value;
+          if (key === 'MASTIFY_JWT_TOKEN' && !state.config.jwtToken) state.config.jwtToken = value;
+          if (key === 'MASTIFY_USERNAME') state.config.username = value;
+          if (key === 'MASTIFY_PASSWORD') state.config.password = value;
+          if (key === 'POLLING_INTERVAL_MS') state.config.pollingIntervalMs = parseInt(value, 10) || 3000;
+        });
+      }
+    } catch (_) {
+      // Normal saat di cloud / Vercel
+    }
 
-        if (key === 'MASTIFY_HOST') state.config.mastifyHost = value;
-        if (key === 'MASTIFY_DEVICE_ID') state.config.deviceId = value;
-        if (key === 'MASTIFY_JWT_TOKEN' && !state.config.jwtToken) state.config.jwtToken = value;
-        if (key === 'MASTIFY_USERNAME' && value && !state.config.username) state.config.username = value;
-        if (key === 'MASTIFY_PASSWORD' && value && !state.config.password) state.config.password = value;
-        if (key === 'POLLING_INTERVAL_MS') state.config.pollingIntervalMs = parseInt(value, 10) || 3000;
-      });
-    } catch (err) {
-      console.warn('[GMS Config] Menggunakan konfigurasi cloud / fallback:', err.message);
+    // Pastikan kita punya JWT Token yang valid. Jika belum ada, otomatis login sekarang di background!
+    if (!state.config.jwtToken && state.config.username && state.config.password) {
+      try {
+        await performLogin();
+      } catch (loginErr) {
+        console.warn('[GMS Auth] Auto-login awal tertunda:', loginErr.message);
+      }
     }
   }
 
@@ -1009,23 +1032,23 @@
   // normalisasi jenis alarm ke kode teknis acuan
   // lookup terpadu: normalisasi kode rule + pesan default fallback jika Mastify tidak kirim field message
   const ALARM_RULE_MAP = {
-    FREQ:   { code: 'FREQ_FAULT',    msg: 'Frekuensi alternator menyimpang di luar batas nominal 50.0 Hz.' },
-    TEMP:   { code: 'ENGINE_TEMP',   msg: 'Suhu pendingin engine terdeteksi melebihi ambang batas aman.' },
-    OIL:    { code: 'OIL_PRESSURE',  msg: 'Tekanan pelumas oli di bawah ambang batas aman.' },
-    PRESS:  { code: 'OIL_PRESSURE',  msg: 'Tekanan pelumas oli di bawah ambang batas aman.' },
-    VOLT:   { code: 'VOLTAGE_FAULT', msg: 'Terdeteksi deviasi ketidakseimbangan tegangan 3-fasa NEMA.' },
-    NEMA:   { code: 'VOLTAGE_FAULT', msg: 'Terdeteksi deviasi ketidakseimbangan tegangan 3-fasa NEMA.' },
-    SENSOR: { code: 'SENSOR_FAULT',  msg: 'Arus loop 4-20mA sensor di luar rentang standar NAMUR NE43.' },
-    NAMUR:  { code: 'SENSOR_FAULT',  msg: 'Arus loop 4-20mA sensor di luar rentang standar NAMUR NE43.' },
-    FUEL:   { code: 'FUEL_LEVEL',    msg: 'Level solar tangki genset di bawah batas aman operasional.' },
-    BATT:   { code: 'BATTERY_FAULT', msg: 'Tegangan baterai starter lemah di bawah batas 24.0 V.' },
-    LOAD:   { code: 'LOAD_FAULT',      msg: 'Beban genset melebihi kapasitas daya nominal (overload).' },
-    OVERLOAD: { code: 'LOAD_FAULT',    msg: 'Beban genset melebihi kapasitas daya nominal (overload).' },
-    IMBAL:  { code: 'CURRENT_IMBALANCE', msg: 'Ketidakseimbangan arus 3-fasa melebihi ambang batas NEMA.' },
+    FREQ: { code: 'FREQ_FAULT', msg: 'Frekuensi alternator menyimpang di luar batas nominal 50.0 Hz.' },
+    TEMP: { code: 'ENGINE_TEMP', msg: 'Suhu pendingin engine terdeteksi melebihi ambang batas aman.' },
+    OIL: { code: 'OIL_PRESSURE', msg: 'Tekanan pelumas oli di bawah ambang batas aman.' },
+    PRESS: { code: 'OIL_PRESSURE', msg: 'Tekanan pelumas oli di bawah ambang batas aman.' },
+    VOLT: { code: 'VOLTAGE_FAULT', msg: 'Terdeteksi deviasi ketidakseimbangan tegangan 3-fasa NEMA.' },
+    NEMA: { code: 'VOLTAGE_FAULT', msg: 'Terdeteksi deviasi ketidakseimbangan tegangan 3-fasa NEMA.' },
+    SENSOR: { code: 'SENSOR_FAULT', msg: 'Arus loop 4-20mA sensor di luar rentang standar NAMUR NE43.' },
+    NAMUR: { code: 'SENSOR_FAULT', msg: 'Arus loop 4-20mA sensor di luar rentang standar NAMUR NE43.' },
+    FUEL: { code: 'FUEL_LEVEL', msg: 'Level solar tangki genset di bawah batas aman operasional.' },
+    BATT: { code: 'BATTERY_FAULT', msg: 'Tegangan baterai starter lemah di bawah batas 24.0 V.' },
+    LOAD: { code: 'LOAD_FAULT', msg: 'Beban genset melebihi kapasitas daya nominal (overload).' },
+    OVERLOAD: { code: 'LOAD_FAULT', msg: 'Beban genset melebihi kapasitas daya nominal (overload).' },
+    IMBAL: { code: 'CURRENT_IMBALANCE', msg: 'Ketidakseimbangan arus 3-fasa melebihi ambang batas NEMA.' },
     CURREN: { code: 'CURRENT_IMBALANCE', msg: 'Ketidakseimbangan arus 3-fasa melebihi ambang batas NEMA.' },
-    ENGINE: { code: 'ENGINE_FAULT',  msg: 'Anomali proteksi engine terdeteksi oleh rule chain.' },
-    TRIP:   { code: 'ENGINE_FAULT',  msg: 'Anomali proteksi engine terdeteksi oleh rule chain.' },
-    FAULT:  { code: 'ENGINE_FAULT',  msg: 'Anomali proteksi engine terdeteksi oleh rule chain.' }
+    ENGINE: { code: 'ENGINE_FAULT', msg: 'Anomali proteksi engine terdeteksi oleh rule chain.' },
+    TRIP: { code: 'ENGINE_FAULT', msg: 'Anomali proteksi engine terdeteksi oleh rule chain.' },
+    FAULT: { code: 'ENGINE_FAULT', msg: 'Anomali proteksi engine terdeteksi oleh rule chain.' }
   };
 
   function formatAlarmRuleName(ruleType) {
@@ -1752,17 +1775,17 @@
 
     // map metric key -> which legend items are visible
     const VISIBILITY = {
-      all:   { temp: true,  press: true,  load: true,  volt: true  },
-      temp:  { temp: true,  press: false, load: false, volt: false },
-      press: { temp: false, press: true,  load: false, volt: false },
-      load:  { temp: false, press: false, load: true,  volt: false },
-      volt:  { temp: false, press: false, load: false, volt: true  }
+      all: { temp: true, press: true, load: true, volt: true },
+      temp: { temp: true, press: false, load: false, volt: false },
+      press: { temp: false, press: true, load: false, volt: false },
+      load: { temp: false, press: false, load: true, volt: false },
+      volt: { temp: false, press: false, load: false, volt: true }
     };
     const vis = VISIBILITY[metric] || VISIBILITY.all;
-    DOM.legendItemTemp.style.display  = vis.temp  ? 'inline-flex' : 'none';
+    DOM.legendItemTemp.style.display = vis.temp ? 'inline-flex' : 'none';
     DOM.legendItemPress.style.display = vis.press ? 'inline-flex' : 'none';
-    DOM.legendItemLoad.style.display  = vis.load  ? 'inline-flex' : 'none';
-    DOM.legendItemVolt.style.display  = vis.volt  ? 'inline-flex' : 'none';
+    DOM.legendItemLoad.style.display = vis.load ? 'inline-flex' : 'none';
+    DOM.legendItemVolt.style.display = vis.volt ? 'inline-flex' : 'none';
   }
 
   // ===========================================================================
@@ -1772,8 +1795,8 @@
   async function executeTelemetryCycle() {
     updateLastSyncTimestamp();
 
-    if (state.currentMode === MODES.OFFLINE) {
-      // MODE 2: OFFLINE MODE / LOCAL TESTING (MQTTX)
+    if (USE_OFFLINE_DATA || state.currentMode === MODES.OFFLINE) {
+      // MODE: OFFLINE MODE / LOCAL TESTING (dataLab.js)
       const frame = getNextOfflineFrame();
       renderRealtimePanel(frame);
       pushTimeseriesPoint(frame);
@@ -1781,7 +1804,7 @@
 
       const timeStr = new Date().toLocaleTimeString('id-ID', { hour: '2-digit', minute: '2-digit', second: '2-digit' });
       const evaluatedAlarms = evaluateTelemetryAlarms(frame, timeStr);
-      renderAlarmSystem(evaluatedAlarms, 'Local Rule Chain (MQTTX Telemetry)');
+      renderAlarmSystem(evaluatedAlarms, 'Data Lab Lokal (Simulasi Offline)');
       return;
     }
 
@@ -1811,35 +1834,28 @@
     } catch (err) {
       console.warn('[GMS Polling] Gagal menghubungi Mastify API:', err.message);
 
-      // KETENTUAN UTAMA: TIDAK BOLEH AUTO-FALLBACK!
-      let displayMsg = err.message;
-      if (err.message && err.message.includes('401')) {
-        displayMsg = 'Token Expired (HTTP 401)';
-      }
-      if (DOM.statusDot) DOM.statusDot.className = 'rocker-led error';
-      if (DOM.dataSourceText) DOM.dataSourceText.textContent = `LIVE API: Gagal Terhubung (${displayMsg})`;
-      if (DOM.lastSyncLabel) {
-        DOM.lastSyncLabel.textContent = `Sinkron: Gagal (${new Date().toLocaleTimeString('id-ID')} WIB)`;
-      }
+      // Auto-fallback ke dataLab.js jika API terputus agar dashboard tidak blank
+      const fallbackFrame = getNextOfflineFrame();
+      renderRealtimePanel(fallbackFrame);
+      pushTimeseriesPoint(fallbackFrame);
+      renderMaintenancePanel(fallbackFrame);
 
-      const tbody = DOM.alarmsTableBody || document.getElementById('alarmsTableBody');
-      if (tbody) {
-        tbody.innerHTML = `
-          <tr>
-            <td colspan="5" class="table-empty" style="color: #b91c1c; font-style: normal; padding: 25px 10px !important;">
-              <div style="font-weight: 700; font-size: 0.85rem; margin-bottom: 4px;">⚠️ LIVE REST API Terputus (${err.message})</div>
-              <div style="font-size: 0.74rem; color: var(--text-muted);">Tidak dapat memverifikasi status alarm dari Mastify Cloud. Beralih ke <strong>OFFLINE DEMO</strong> untuk demonstrasi data lokal.</div>
-            </td>
-          </tr>`;
+      const timeStr = new Date().toLocaleTimeString('id-ID', { hour: '2-digit', minute: '2-digit', second: '2-digit' });
+      const evaluatedAlarms = evaluateTelemetryAlarms(fallbackFrame, timeStr);
+      renderAlarmSystem(evaluatedAlarms, 'Simulasi Lab (dataLab.js) — Terputus');
+
+      if (DOM.statusDot) DOM.statusDot.className = 'rocker-led error';
+      if (DOM.dataSourceText) DOM.dataSourceText.textContent = `LIVE API: Terputus (${err.message}) — Fallback Data Lab`;
+      if (DOM.lastSyncLabel) {
+        DOM.lastSyncLabel.textContent = `Sinkron: Fallback Data Lab (${new Date().toLocaleTimeString('id-ID')} WIB)`;
       }
-      const countText = DOM.alarmActiveCountText || document.getElementById('alarmActiveCountText');
-      if (countText) countText.textContent = 'Status: Disconnected';
     }
   }
 
   // generator data telemetri offline (mendukung injeksi skenario alarm via keyboard untuk demo sidang)
   function getNextOfflineFrame() {
-    const frames = OFFLINE_CAPTURED_DATA.frames;
+    const dataset = (typeof window !== 'undefined' && window.DATA_LAB) ? window.DATA_LAB : OFFLINE_CAPTURED_DATA;
+    const frames = dataset.frames || OFFLINE_CAPTURED_DATA.frames;
     const baseFrame = frames[state.offlineFrameIndex % frames.length];
     state.offlineFrameIndex++;
 
@@ -1935,7 +1951,7 @@
   // ===========================================================================
   // 9. REALTIME CLOCK & UTILS
   // ===========================================================================
-    // ===========================================================================
+  // ===========================================================================
   // 8. HEALTH CHECK STATUS BADGE
   // ===========================================================================
   function updateConnectionHealthBadge(overrideTs) {
