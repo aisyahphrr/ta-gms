@@ -21,14 +21,14 @@
   <!-- Chart.js CDN untuk Grafik Histori Timeseries -->
   <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
 
-  <!-- Style Utama SCADA -->
+  <!-- Style Utama -->
   <link rel="stylesheet" href="style.css?v=24">
 </head>
 
 <body>
   <header class="gms-header">
     <div class="header-inner">
-      <!-- Brand & Metadata Sidang -->
+
       <div class="brand-block">
         <div class="brand-logo" title="Simbol Alternator Mesin 3-Fasa Industri">
           <svg width="26" height="26" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9"
@@ -103,7 +103,7 @@
       </div>
 
       <div class="realtime-content">
-        <!-- Hero State: Engine State Card (compact v1.1) -->
+        <!-- Hero State: Status Mesin Genset -->
         <div class="engine-state-card engine-state-card--compact state-stopped" id="engineStateCard">
           <div class="engine-state-header">
             <span class="state-sub">STATUS OPERASIONAL MESIN</span>
@@ -114,7 +114,9 @@
               <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"
                 stroke-linecap="round" stroke-linejoin="round">
                 <circle cx="12" cy="12" r="3"></circle>
-                <path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1 0 2.83 2 2 0 0 1-2.83 0l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-2 2 2 2 0 0 1-2-2v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83 0 2 2 0 0 1 0-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1-2-2 2 2 0 0 1 2-2h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 0-2.83 2 2 0 0 1 2.83 0l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 2-2 2 2 0 0 1 2 2v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 0 2 2 0 0 1 0 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 2 2 2 2 0 0 1-2 2h-.09a1.65 1.65 0 0 0-1.51 1z"></path>
+                <path
+                  d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1 0 2.83 2 2 0 0 1-2.83 0l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-2 2 2 2 0 0 1-2-2v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83 0 2 2 0 0 1 0-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1-2-2 2 2 0 0 1 2-2h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 0-2.83 2 2 0 0 1 2.83 0l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 2-2 2 2 0 0 1 2 2v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 0 2 2 0 0 1 0 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 2 2 2 2 0 0 1-2 2h-.09a1.65 1.65 0 0 0-1.51 1z">
+                </path>
               </svg>
             </div>
             <div class="state-details">
@@ -209,8 +211,8 @@
         <div class="voltage-consistency-card">
           <div class="voltage-header">
             <div class="voltage-title-block">
-              <span class="voltage-title">KELISTRIKAN 3-FASA &amp; POWER METER</span>
-              <span class="voltage-sub">RS485 Modbus • NEMA V: <strong id="valUnbalPct">--%</strong> • NEMA I: <strong id="valIUnbalPct">--%</strong></span>
+              <span class="voltage-title">OUTPUT KELISTRIKAN 3-FASA</span>
+              <span class="voltage-sub">RS485 Modbus • Standar NEMA MG-1 (Nominal 220V/380V)</span>
             </div>
             <div class="voltage-badge-group">
               <div class="voltage-badge badge-nema-normal" id="badgeVoltageBalance">
@@ -383,7 +385,7 @@
         </div>
 
         <div class="alarm-table-footer">
-          <span class="alarm-source-indicator" id="alarmSourceNote">Endpoint: /api/alarm/DEVICE/... (ACTIVE_UNACK)</span>
+          <span class="alarm-source-indicator" id="alarmSourceNote">Evaluasi Mastify Rule Chain</span>
           <span class="alarm-count-indicator" id="alarmActiveCountText">0 Alarm Aktif</span>
         </div>
       </div>
@@ -453,10 +455,10 @@
             </div>
           </div>
 
-          <!-- Estimasi Konsumsi BBM Model SFC Card (kanan bawah) -->
+          <!-- Estimasi Konsumsi BBM Model SFC Card  -->
           <div class="maint-card">
             <div class="maint-card-header">
-              <span class="maint-card-title">ESTIMASI KONSUMSI BBM (MODEL SFC)</span>
+              <span class="maint-card-title">ESTIMASI KONSUMSI BBM</span>
             </div>
             <div class="fuel-val-row">
               <span class="fuel-value font-mono" id="valFuelEst">---.-</span>
@@ -486,20 +488,20 @@
         Mastify IoT Cloud.
       </div>
       <div class="footer-right">
-        <span class="footer-spec">Arsitektur: Read-Only Client</span>
+        <span class="footer-spec">Arsitektur: Read-Only SCADA Client</span>
         <span class="footer-divider">•</span>
-        <span class="footer-spec">HTTP Interceptor Auto-Refresh</span>
+        <span class="footer-spec">Standar: SPLN D3.022-1:2012 &amp; NEMA MG-1</span>
         <span class="footer-divider">•</span>
-        <span class="footer-spec">2-Mode Operation (Live / Offline)</span>
+        <span class="footer-spec">Operasi: Dual-Mode (Live Hardware / Data Lab)</span>
       </div>
     </div>
   </footer>
 
 
   <!-- Dataset Laboratorium / Offline Data Lab -->
-  <script src="dataLab.js?v=24"></script>
+  <script src="dataLab.js?v=25"></script>
   <!-- Core Script Dashboard GMS -->
-  <script src="app.js?v=29"></script>
+  <script src="app.js?v=30"></script>
 </body>
 
 </html>

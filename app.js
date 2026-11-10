@@ -1,18 +1,17 @@
 // =============================================================================
-// GENSET MONITORING SYSTEM (GMS) — Dashboard Client Core
-// Demo Sidang TA • Single Page Read-Only Architecture
-// Ref: R3 Final & Detail Scope Teknis v1.1 PT MASCH
+// GENSET MONITORING SYSTEM (GMS) — Dashboard Monitoring Genset 3-Fasa
+// Tugas Akhir IPB University x PT MASCH
 //
-// 2 mode eksplisit, tanpa auto-fallback — transisi HANYA lewat tombol user.
-// Zero Logic in Frontend: app.js hanya Presentation Layer.
-// Semua kalkulasi (threshold, hour meter, SFC, alarm) ada di backend/firmware.
+// Operasi Sistem:
+// 1. Mode Online (Live): Mengambil data telemetri real-time dari platform Mastify IoT.
+// 2. Mode Offline (Data Lab): Menggunakan dataLab.js untuk simulasi pengujian.
 // =============================================================================
 
 (function () {
   'use strict';
 
   // ===========================================================================
-  // 1. DEFINISI MODE & DEFAULT CONFIGURATION
+  // 1. DEFINISI MODE & KONFIGURASI DEFAULT
   // ===========================================================================
   const USE_OFFLINE_DATA = false; // true = pakai dataLab.js, false = fetch dari Mastify API
   if (typeof window !== 'undefined') window.USE_OFFLINE_DATA = USE_OFFLINE_DATA;
@@ -38,258 +37,38 @@
     config: Object.assign({}, DEFAULT_CONFIG),
     pollTimer: null,
     clockTimer: null,
-    activeChartFilter: 'all', // 'all' | 'temp' | 'press' | 'load' | 'volt'
+    activeChartFilter: 'all',
     chartInstance: null,
     offlineFrameIndex: 0,
     currentAlarms: [],
-    alarmLog: [], // default bersih: Tidak Ada Alarm Aktif (Sistem Normal)
-    activeSimulation: 'normal', // 'normal' | 'temp' | 'oil' | 'voltage' | 'freq' | 'imbalance' | 'sensor_ai1'
-    username: '',
-    password: ''
+    alarmLog: [],
+    activeSimulation: 'normal'
   };
 
-  // ===========================================================================
-  // 2. DATASET LOKAL STATIS (OFFLINE MODE DEMO SIDANG)
-  // Data matang riil hasil rekaman ESP32-S3 & Mastify Rule Chain
-  // ===========================================================================
-  const OFFLINE_CAPTURED_DATA = {
-    // Snapshot telemetri berputar siklik untuk demo sidang
-    frames: [
-      {
-        engine_state: 'RUNNING',
-        engine_state_note: 'Mesin Beroperasi Nominal • Menyuplai Beban',
-        engine_temp_c: 83.4,
-        temp_status: 'NORMAL',
-        oil_press_bar: 3.65,
-        press_status: 'NORMAL',
-        load_pct: 69.5,
-        load_status: 'NORMAL',
-        fuel_level_mm: 725.0,
-        fuel_status: 'NORMAL',
-        battery_v: 26.8,
-        freq_hz: 50.0,
-        v_unbal_pct: 0.5,
-        voltage_balance: 'SEIMBANG (NORMAL)',
-        v_l1: 227.5,
-        v_l2: 228.0,
-        v_l3: 230.2,
-        run_hours: 1284.5,
-        maint_due_h: 15.5,
-        maintenance_status: 'SIAP OPERASI',
-        fuel_est_l: 344.2,
-        i_l1: 77.7, i_l2: 37.4, i_l3: 39.9,
-        p_kw: 33.4, s_kva: 35.3, pf: 0.94,
-        i_unbal_pct: 18.5,
-        ai1_st: 'OK', ai2_st: 'OK', ai3_st: 'OK',
-        fuel_vol_l: 367.5
-      },
-      {
-        engine_state: 'RUNNING',
-        engine_state_note: 'Mesin Beroperasi Nominal • Menyuplai Beban',
-        engine_temp_c: 83.2,
-        temp_status: 'NORMAL',
-        oil_press_bar: 3.62,
-        press_status: 'NORMAL',
-        load_pct: 68.2,
-        load_status: 'NORMAL',
-        fuel_level_mm: 724.0,
-        fuel_status: 'NORMAL',
-        battery_v: 26.8,
-        freq_hz: 50.0,
-        v_unbal_pct: 0.6,
-        voltage_balance: 'SEIMBANG (NORMAL)',
-        v_l1: 227.2,
-        v_l2: 227.9,
-        v_l3: 230.1,
-        run_hours: 1284.5,
-        maint_due_h: 15.5,
-        maintenance_status: 'SIAP OPERASI',
-        fuel_est_l: 344.6,
-        i_l1: 76.9, i_l2: 37.1, i_l3: 39.5,
-        p_kw: 33.0, s_kva: 34.9, pf: 0.94,
-        i_unbal_pct: 18.2,
-        ai1_st: 'OK', ai2_st: 'OK', ai3_st: 'OK',
-        fuel_vol_l: 367.8
-      },
-      {
-        engine_state: 'RUNNING',
-        engine_state_note: 'Mesin Beroperasi Nominal • Menyuplai Beban',
-        engine_temp_c: 83.6,
-        temp_status: 'NORMAL',
-        oil_press_bar: 3.60,
-        press_status: 'NORMAL',
-        load_pct: 71.0,
-        load_status: 'NORMAL',
-        fuel_level_mm: 721.0,
-        fuel_status: 'NORMAL',
-        battery_v: 26.7,
-        freq_hz: 50.0,
-        v_unbal_pct: 0.7,
-        voltage_balance: 'SEIMBANG (NORMAL)',
-        v_l1: 226.8,
-        v_l2: 227.5,
-        v_l3: 229.8,
-        run_hours: 1284.5,
-        maint_due_h: 15.5,
-        maintenance_status: 'SIAP OPERASI',
-        fuel_est_l: 345.0,
-        i_l1: 78.2, i_l2: 37.8, i_l3: 40.1,
-        p_kw: 34.1, s_kva: 36.0, pf: 0.95,
-        i_unbal_pct: 18.8,
-        ai1_st: 'OK', ai2_st: 'OK', ai3_st: 'OK',
-        fuel_vol_l: 368.0
-      },
-      {
-        engine_state: 'RUNNING',
-        engine_state_note: 'Mesin Beroperasi Nominal • Menyuplai Beban',
-        engine_temp_c: 83.8,
-        temp_status: 'NORMAL',
-        oil_press_bar: 3.58,
-        press_status: 'NORMAL',
-        load_pct: 72.1,
-        load_status: 'NORMAL',
-        fuel_level_mm: 719.0,
-        fuel_status: 'NORMAL',
-        battery_v: 26.8,
-        freq_hz: 50.0,
-        v_unbal_pct: 0.6,
-        voltage_balance: 'SEIMBANG (NORMAL)',
-        v_l1: 227.0,
-        v_l2: 227.6,
-        v_l3: 229.9,
-        run_hours: 1284.5,
-        maint_due_h: 15.5,
-        maintenance_status: 'SIAP OPERASI',
-        fuel_est_l: 345.4,
-        i_l1: 79.0, i_l2: 38.2, i_l3: 40.4,
-        p_kw: 34.5, s_kva: 36.4, pf: 0.95,
-        i_unbal_pct: 18.6,
-        ai1_st: 'OK', ai2_st: 'OK', ai3_st: 'OK',
-        fuel_vol_l: 368.3
-      },
-      {
-        engine_state: 'RUNNING',
-        engine_state_note: 'Mesin Beroperasi Nominal • Menyuplai Beban',
-        engine_temp_c: 83.0,
-        temp_status: 'NORMAL',
-        oil_press_bar: 3.64,
-        press_status: 'NORMAL',
-        load_pct: 69.8,
-        load_status: 'NORMAL',
-        fuel_level_mm: 717.0,
-        fuel_status: 'NORMAL',
-        battery_v: 26.8,
-        freq_hz: 50.0,
-        v_unbal_pct: 0.6,
-        voltage_balance: 'SEIMBANG (NORMAL)',
-        v_l1: 227.2,
-        v_l2: 227.8,
-        v_l3: 230.1,
-        run_hours: 1284.5,
-        maint_due_h: 15.5,
-        maintenance_status: 'SIAP OPERASI',
-        fuel_est_l: 345.9,
-        i_l1: 77.5, i_l2: 37.3, i_l3: 39.8,
-        p_kw: 33.3, s_kva: 35.2, pf: 0.94,
-        i_unbal_pct: 18.4,
-        ai1_st: 'OK', ai2_st: 'OK', ai3_st: 'OK',
-        fuel_vol_l: 368.6
-      },
-      {
-        engine_state: 'RUNNING',
-        engine_state_note: 'Suhu Kembali Normal • Sistem Stabil',
-        engine_temp_c: 83.1,
-        temp_status: 'NORMAL',
-        oil_press_bar: 3.60,
-        press_status: 'NORMAL',
-        load_pct: 68.9,
-        load_status: 'NORMAL',
-        fuel_level_mm: 715.0,
-        fuel_status: 'NORMAL',
-        battery_v: 26.8,
-        freq_hz: 50.0,
-        v_unbal_pct: 0.6,
-        voltage_balance: 'SEIMBANG (NORMAL)',
-        v_l1: 227.3,
-        v_l2: 228.0,
-        v_l3: 230.2,
-        run_hours: 1284.5,
-        maint_due_h: 15.5,
-        maintenance_status: 'SIAP OPERASI',
-        fuel_est_l: 346.3,
-        i_l1: 76.8, i_l2: 37.0, i_l3: 39.4,
-        p_kw: 32.9, s_kva: 34.8, pf: 0.94,
-        i_unbal_pct: 18.1,
-        ai1_st: 'OK', ai2_st: 'OK', ai3_st: 'OK',
-        fuel_vol_l: 368.9
-      }
-    ],
+  // Helper akses penyimpanan lokal browser (localStorage)
+  function safeGetStorage(key) {
+    try { return localStorage.getItem(key); } catch (_) { return null; }
+  }
+  function safeSetStorage(key, val) {
+    try { localStorage.setItem(key, val); } catch (_) { /* abaikan error */ }
+  }
 
-    // Daftar alarm yang SEDANG AKTIF (Active Alarms)
-    // 3 Tingkat Severity Resmi: NORMAL, MAJOR, CRITICAL
-    activeAlarms: [
-      {
-        timestamp: '09:05:12',
-        level: 'MAJOR',
-        ruleType: 'ENGINE_TEMP',
-        message: 'Suhu pendingin engine mendekati ambang batas peringatan (85.0°C).',
-        ruleStatus: 'ACTIVE'
-      },
-      {
-        timestamp: '08:42:19',
-        level: 'MAJOR',
-        ruleType: 'SENSOR_FAULT',
-        message: 'Loop arus AI2 PT100 terdeteksi fluktuasi derau di luar batas valid (< 3.8mA).',
-        ruleStatus: 'ACTIVE'
-      }
-    ],
+  // Helper format angka tampilan (menghasilkan '--' jika nilai null/undefined/NaN)
+  function formatNum(val, dec) {
+    if (val === null || val === undefined || isNaN(Number(val))) return '--';
+    return Number(val).toFixed(dec);
+  }
 
-    // Catatan kronologis lengkap (Alarm History)
-    alarmHistory: [
-      {
-        timestamp: '09:12:45',
-        level: 'NORMAL',
-        ruleType: 'VOLTAGE_FAULT',
-        message: 'Keseimbangan tegangan 3-fasa nominal (Deviasi NEMA 0.6%). Beban stabil 68.4%.',
-        ruleStatus: 'CLEARED'
-      },
-      {
-        timestamp: '09:05:12',
-        level: 'MAJOR',
-        ruleType: 'ENGINE_TEMP',
-        message: 'Suhu pendingin engine mendekati ambang batas peringatan (85.0°C).',
-        ruleStatus: 'ACTIVE'
-      },
-      {
-        timestamp: '08:42:19',
-        level: 'MAJOR',
-        ruleType: 'SENSOR_FAULT',
-        message: 'Loop arus AI2 PT100 terdeteksi fluktuasi derau di luar batas valid (< 3.8mA).',
-        ruleStatus: 'ACTIVE'
-      },
-      {
-        timestamp: '07:15:02',
-        level: 'CRITICAL',
-        ruleType: 'OIL_PRESSURE',
-        message: 'Peringatan tekanan pelumas rendah saat start-up (di bawah 1.8 bar).',
-        ruleStatus: 'ACKNOWLEDGED'
-      },
-      {
-        timestamp: '06:30:15',
-        level: 'MAJOR',
-        ruleType: 'FREQ_FAULT',
-        message: 'Frekuensi alternator sempat menyentuh 48.9 Hz sebelum kembali ke nominal 50.0 Hz.',
-        ruleStatus: 'RESOLVED'
-      },
-      {
-        timestamp: '06:00:00',
-        level: 'NORMAL',
-        ruleType: 'SENSOR_FAULT',
-        message: 'Inisialisasi sistem telemetri 3-fasa sukses. Register Modbus RS485 EWIG tersinkron.',
-        ruleStatus: 'CLEARED'
-      }
-    ]
-  };
+  // ===========================================================================
+  // 2. DATASET LOKAL (DATA LAB DARI dataLab.js)
+  // Dipisahkan ke file dataLab.js untuk modularitas dan kemudahan simulasi
+  // ===========================================================================
+  function getDataLabDataset() {
+    if (typeof window !== 'undefined' && window.DATA_LAB && Array.isArray(window.DATA_LAB.frames)) {
+      return window.DATA_LAB;
+    }
+    return { frames: [{}] };
+  }
 
   // ===========================================================================
   // 3. CACHED DOM ELEMENTS
@@ -303,8 +82,6 @@
     dataSourceText: document.getElementById('dataSourceText'),
     realtimeClock: document.getElementById('realtimeClock'),
     lastSyncLabel: document.getElementById('lastSyncLabel'),
-    connHealthBadge: document.getElementById('connHealthBadge'),
-    connHealthText: document.getElementById('connHealthText'),
 
     // Panel 1: Status & Real-Time
     engineStateCard: document.getElementById('engineStateCard'),
@@ -329,7 +106,7 @@
     valUnbalPct: document.getElementById('valUnbalPct'),
     badgeVoltageBalance: document.getElementById('badgeVoltageBalance'),
     textVoltageBalance: document.getElementById('textVoltageBalance'),
-    // v1.1 additions: 3-phase amps, power, current imbalance
+    // Parameter kelistrikan 3-fasa, daya, dan ketidakseimbangan arus
     valI1: document.getElementById('valI1'),
     valI2: document.getElementById('valI2'),
     valI3: document.getElementById('valI3'),
@@ -373,9 +150,8 @@
   };
 
   // ===========================================================================
-  // 3b. AXIOS HTTP CLIENT + AUTO RE-LOGIN INTERCEPTOR (v1.1)
-  // apiClient menggantikan raw fetch: semua request telemetri & alarm pakai ini
-  // agar interceptor 401 → auto re-login berjalan transparan tanpa reload
+  // 4. KLIEN HTTP AXIOS & INTERCEPTOR AUTENTIKASI
+  // Menangani penambahan token JWT dan auto-login otomatis saat sesi habis
   // ===========================================================================
   const apiClient = axios.create({
     timeout: 5000,
@@ -387,7 +163,7 @@
 
   // Tambahkan header Authorization dari state/localStorage ke setiap request
   apiClient.interceptors.request.use(function (config) {
-    const token = state.config.jwtToken || safeGetStorageEarly('GMS_JWT_TOKEN');
+    const token = state.config.jwtToken || safeGetStorage('GMS_JWT_TOKEN');
     if (token && !config.headers['X-Authorization']) {
       config.headers['X-Authorization'] = token.startsWith('Bearer ') ? token : 'Bearer ' + token;
     }
@@ -432,8 +208,8 @@
 
   // Re-login otomatis ke Mastify di background tanpa intervensi user
   async function performLogin() {
-    const user = state.config.username || safeGetStorageEarly('GMS_USERNAME') || DEFAULT_CONFIG.username || 'fatina@masch.cc';
-    const pass = state.config.password || safeGetStorageEarly('GMS_PASSWORD') || DEFAULT_CONFIG.password || 'masch33!';
+    const user = state.config.username || safeGetStorage('GMS_USERNAME') || DEFAULT_CONFIG.username || 'fatina@masch.cc';
+    const pass = state.config.password || safeGetStorage('GMS_PASSWORD') || DEFAULT_CONFIG.password || 'masch33!';
     if (!user || !pass) {
       throw new Error('Kredensial Mastify belum terkonfigurasi.');
     }
@@ -448,40 +224,18 @@
     state.config.jwtToken = newToken;
     if (res.data.refreshToken) {
       state.config.refreshToken = res.data.refreshToken;
-      safeSetStorageEarly('GMS_REFRESH_TOKEN', res.data.refreshToken);
+      safeSetStorage('GMS_REFRESH_TOKEN', res.data.refreshToken);
     }
-    safeSetStorageEarly('GMS_JWT_TOKEN', newToken);
+    safeSetStorage('GMS_JWT_TOKEN', newToken);
     console.info('[GMS Auth] Token JWT baru berhasil didapat via re-login di background.');
     return newToken;
-  }
-
-  // Guard localStorage — perlu versi early sebelum safeGetStorage dideklarasikan di bawah
-  function safeGetStorageEarly(key) {
-    try { return localStorage.getItem(key); } catch (_) { return null; }
-  }
-  function safeSetStorageEarly(key, val) {
-    try { localStorage.setItem(key, val); } catch (_) { /* no-op */ }
-  }
-
-  // Helper: format angka atau tampilkan '--' jika null/undefined/NaN
-  function formatNum(val, dec) {
-    if (val === null || val === undefined || isNaN(Number(val))) return '--';
-    return Number(val).toFixed(dec);
   }
 
   // ===========================================================================
   // 4. PEMUATAN KONFIGURASI DARI .env 
   // ===========================================================================
-  // akses localStorage dibungkus guard agar aman di iframe / private browsing
-  function safeGetStorage(key) {
-    try { return localStorage.getItem(key); } catch (_) { return null; }
-  }
-  function safeSetStorage(key, val) {
-    try { localStorage.setItem(key, val); } catch (_) { /* no-op */ }
-  }
-
   async function loadEnvironmentConfig() {
-    // prioritaskan token URL ?token= / ?jwt= agar penguji sidang bisa inject token tanpa ubah .env
+    // Prioritaskan parameter URL (?token= / ?jwt=) jika disediakan
     const urlParams = new URLSearchParams(window.location.search);
     const queryToken = urlParams.get('token') || urlParams.get('jwt');
     const queryHost = urlParams.get('host');
@@ -502,7 +256,7 @@
     if (queryHost) state.config.mastifyHost = queryHost;
     if (queryDevice) state.config.deviceId = queryDevice;
 
-    // Ambil kredensial dari localStorage (disimpan via modal settings)
+    // Baca kredensial dari penyimpanan lokal jika tersedia
     const cachedUser = safeGetStorage('GMS_USERNAME');
     const cachedPass = safeGetStorage('GMS_PASSWORD');
     if (cachedUser) state.config.username = cachedUser;
@@ -569,7 +323,7 @@
   // 5. REST API TELEMETRY FETCHER (MASTIFY CLOUD)
   // ===========================================================================
   async function fetchMastifyTelemetry() {
-    // Tambahkan keys v1.1: arus fasa, daya, PF, ketidakseimbangan arus, status sensor NAMUR
+    // Daftar parameter telemetri yang diminta dari server Mastify
     const keys = [
       'engine_state', 'status',
       'engine_temp_c', 'temperature', 'temp_status',
@@ -592,7 +346,7 @@
 
     const url = getMastifyApiEndpoint(`/plugins/telemetry/DEVICE/${state.config.deviceId}/values/timeseries?keys=${keys}`);
 
-    // Gunakan apiClient (Axios) agar interceptor 401 → auto re-login bekerja
+    // Kirim permintaan data telemetri dengan header autentikasi
     const res = await apiClient.get(url);
     return parseMastifyResponse(res.data);
   }
@@ -629,9 +383,6 @@
     }
     if (maxTs > 0) {
       state.lastTelemetryTs = maxTs;
-      if (typeof updateConnectionHealthBadge === 'function') {
-        updateConnectionHealthBadge(maxTs);
-      }
     }
 
     // Helper konversi angka murni tanpa fallback buatan (null jika data belum tersedia)
@@ -718,7 +469,7 @@
   }
 
   // ===========================================================================
-  // 6. RENDER DATA KE 4 PANEL UTAMA (ZERO LOGIC CLIENT)
+  // 6. RENDER DATA KE PANEL MONITORING
   // ===========================================================================
 
   function renderRealtimePanel(data) {
@@ -792,12 +543,12 @@
 
     renderNemaVoltageBalance(data.voltage_balance, data.v_unbal_pct);
 
-    // 4. v1.1: Arus Fasa 3-Fasa (i_l1/2/3)
+    // Arus beban 3-fasa
     if (DOM.valI1) DOM.valI1.textContent = (data.i_l1 !== null && data.i_l1 !== undefined) ? formatNum(data.i_l1, 2) : '--';
     if (DOM.valI2) DOM.valI2.textContent = (data.i_l2 !== null && data.i_l2 !== undefined) ? formatNum(data.i_l2, 2) : '--';
     if (DOM.valI3) DOM.valI3.textContent = (data.i_l3 !== null && data.i_l3 !== undefined) ? formatNum(data.i_l3, 2) : '--';
 
-    // 5. v1.1: Daya Aktif, Daya Semu, Power Factor
+    // Daya aktif, daya semu, dan faktor daya
     if (DOM.valPKw) DOM.valPKw.textContent = (data.p_kw !== null && data.p_kw !== undefined)
       ? formatNum(data.p_kw, 2) + ' kW' : '--';
     if (DOM.valSKva) DOM.valSKva.textContent = (data.s_kva !== null && data.s_kva !== undefined)
@@ -805,7 +556,7 @@
     if (DOM.valPf) DOM.valPf.textContent = (data.pf !== null && data.pf !== undefined)
       ? formatNum(data.pf, 2) : '--';
 
-    // 6. v1.1: Ketidakseimbangan Arus NEMA (i_unbal_pct) — simetris dengan badge tegangan tanpa dot
+    // Ketidakseimbangan arus 3-fasa sesuai standar NEMA
     if (DOM.badgeIUnbal) {
       const iu = data.i_unbal_pct;
       if (iu === null || iu === undefined) {
@@ -823,13 +574,13 @@
       }
     }
 
-    // 7. v1.1: Volume Solar (fuel_vol_l)
+    // Estimasi volume solar
     if (DOM.valFuelVolL) {
       DOM.valFuelVolL.textContent = (data.fuel_vol_l !== null && data.fuel_vol_l !== undefined)
         ? '(' + formatNum(data.fuel_vol_l, 1) + ' L)' : '';
     }
 
-    // 8. v1.1: Status Sensor NAMUR NE43 (ai1_st -> oli, ai2_st -> suhu, ai3_st -> solar)
+    // Evaluasi kondisi loop sensor standar NAMUR NE43
     renderNamurSensorStatus(DOM.pillPressStatus, data.press_status, data.ai1_st, data.oil_press_bar);
     renderNamurSensorStatus(DOM.pillTempStatus, data.temp_status, data.ai2_st, data.engine_temp_c);
     renderNamurSensorStatus(DOM.pillFuelStatus, data.fuel_status, data.ai3_st, data.fuel_level_mm);
@@ -968,7 +719,7 @@
     chart.update('none');
   }
 
-  // polling alarm aktif langsung dari API ThingsBoard / Mastify (v1.1: ACTIVE_UNACK + apiClient)
+  // Mengambil daftar alarm aktif langsung dari server Mastify
   async function fetchMastifyAlarms() {
     const url = getMastifyApiEndpoint(`/alarm/DEVICE/${state.config.deviceId}?status=ACTIVE_UNACK&pageSize=10&page=0&sortProperty=createdTime&sortOrder=DESC`);
 
@@ -1097,7 +848,7 @@
   }
 
   // evaluasi rule chain lokal — dipakai di offline mode & sebagai fallback jika Mastify API kosong
-  // threshold sesuai Dokumen Detail Scope Teknis v1.1 PT MASCH
+  // Ambang batas alarm operasional genset
   function evaluateTelemetryAlarms(t, timeStr) {
     if (!t) return [];
     const alarms = [];
@@ -1384,7 +1135,7 @@
       const ruleCode = String(alarm.ruleType || 'SYS_EVENT').toUpperCase();
       const statusTextHtml = `<span class="alarm-status-text ${statusInfo.cssClass}">${statusInfo.text}</span>`;
 
-      // v1.1: tombol Acknowledge hanya muncul untuk alarm ACTIVE yang punya id
+      // Tombol konfirmasi (Acknowledge) untuk alarm aktif
       const showAckBtn = isActive && alarm.id && alarm.id !== '';
       const ackCell = showAckBtn
         ? `<td class="col-aksi"><button class="btn-alarm-ack" data-alarm-id="${alarm.id}">Acknowledge</button></td>`
@@ -1887,14 +1638,14 @@
       frame.freq_hz = 48.2;
       frame.engine_state_note = 'SIMULASI SIDANG: Deviasi Frekuensi Alternator';
     } else if (state.activeSimulation === 'imbalance') {
-      // v1.1: Ketidakseimbangan Arus NEMA kritis
+      // Skenario simulasi: ketidakseimbangan arus NEMA tinggi
       frame.i_unbal_pct = 48.5;
       frame.i_l1 = 110.0;
       frame.i_l2 = 42.0;
       frame.i_l3 = 38.0;
       frame.engine_state_note = 'SIMULASI SIDANG: CURRENT_IMBALANCE NEMA Kritis (>40%)';
     } else if (state.activeSimulation === 'sensor_ai1') {
-      // v1.1: Sensor Fault NAMUR NE43 AI1 (Tekanan Oli)
+      // Skenario simulasi: loop sensor tekanan oli terputus
       frame.ai1_st = 'FAULT_LOW';
       frame.oil_press_bar = null; // sensor faulty — tidak ada pembacaan valid
       frame.engine_state_note = 'SIMULASI SIDANG: SENSOR_FAULT_AI1 — Loop 4-20mA Putus';
@@ -1956,37 +1707,6 @@
   // ===========================================================================
   // 9. REALTIME CLOCK & UTILS
   // ===========================================================================
-  // ===========================================================================
-  // 8. HEALTH CHECK STATUS BADGE
-  // ===========================================================================
-  function updateConnectionHealthBadge(overrideTs) {
-    if (!DOM.connHealthBadge || !DOM.connHealthText) return;
-
-    if (state.currentMode === MODES.OFFLINE) {
-      DOM.connHealthBadge.className = 'connection-health-pill health-offline';
-      DOM.connHealthText.textContent = 'OFFLINE MODE (DATA LAB)';
-      return;
-    }
-
-    const ts = (overrideTs !== undefined && overrideTs !== null) ? overrideTs : state.lastTelemetryTs;
-    if (!ts || ts <= 0) {
-      DOM.connHealthBadge.className = 'connection-health-pill health-disconnected';
-      DOM.connHealthText.textContent = 'DISCONNECTED / HARDWARE OFF';
-      return;
-    }
-
-    const now = Date.now();
-    const diffSec = Math.round((now - ts) / 1000);
-
-    if (diffSec <= 30) {
-      DOM.connHealthBadge.className = 'connection-health-pill health-online';
-      DOM.connHealthText.textContent = 'ONLINE (HARDWARE)';
-    } else {
-      DOM.connHealthBadge.className = 'connection-health-pill health-disconnected';
-      DOM.connHealthText.textContent = 'DISCONNECTED / HARDWARE OFF';
-    }
-  }
-
   function startRealtimeClock() {
     function updateClock() {
       const now = new Date();
@@ -2034,8 +1754,8 @@
     // Tekan 2 / P: Low Oil Pressure (Alarm OIL_PRESSURE)
     // Tekan 3 / V: Voltage Fault NEMA (Alarm VOLTAGE_FAULT)
     // Tekan 4 / F: Frequency Trip (Alarm FREQ_FAULT)
-    // Tekan 5 / I: Current Imbalance NEMA >40% (Alarm CURRENT_IMBALANCE) [v1.1]
-    // Tekan 6 / S: Sensor AI1 Fault NAMUR NE43 (Alarm SENSOR_FAULT_AI1) [v1.1]
+    // Tekan 5 / I: Simulasi ketidakseimbangan arus NEMA
+    // Tekan 6 / S: Simulasi sensor tekanan oli putus (NAMUR NE43)
     // Tekan C    : Clear Alarms (Normalkan semua alarm)
     window.addEventListener('keydown', function (e) {
       // abaikan jika user sedang mengetik di input field
@@ -2046,8 +1766,8 @@
       else if (k === '2' || k === 'p') window.gmsSimulate('oil');
       else if (k === '3' || k === 'v') window.gmsSimulate('voltage');
       else if (k === '4' || k === 'f') window.gmsSimulate('freq');
-      else if (k === '5' || k === 'i') window.gmsSimulate('imbalance');   // v1.1: CURRENT_IMBALANCE
-      else if (k === '6' || k === 's') window.gmsSimulate('sensor_ai1'); // v1.1: SENSOR_FAULT_AI1
+      else if (k === '5' || k === 'i') window.gmsSimulate('imbalance');   // Simulasi ketidakseimbangan arus
+      else if (k === '6' || k === 's') window.gmsSimulate('sensor_ai1'); // Simulasi anomali sensor
       else if (k === 'c') window.gmsSimulate('normal');
     });
 
