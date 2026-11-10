@@ -213,13 +213,11 @@
               <span class="voltage-sub">RS485 Modbus • NEMA V: <strong id="valUnbalPct">--%</strong> • NEMA I: <strong id="valIUnbalPct">--%</strong></span>
             </div>
             <div class="voltage-badge-group">
-              <div class="voltage-badge voltage-badge" id="badgeVoltageBalance">
-                <span class="v-status-dot" id="dotVoltageBalance"></span>
-                <span id="textVoltageBalance">TEGANGAN --</span>
+              <div class="voltage-badge badge-nema-normal" id="badgeVoltageBalance">
+                <span id="textVoltageBalance">TEGANGAN SEIMBANG (--%)</span>
               </div>
-              <div class="voltage-badge voltage-badge" id="badgeIUnbal">
-                <span class="v-status-dot"></span>
-                <span>ARUS --</span>
+              <div class="voltage-badge badge-nema-normal" id="badgeIUnbal">
+                <span>ARUS SEIMBANG (--%)</span>
               </div>
             </div>
           </div>
@@ -501,7 +499,7 @@
   <!-- Dataset Laboratorium / Offline Data Lab -->
   <script src="dataLab.js?v=24"></script>
   <!-- Core Script Dashboard GMS -->
-  <script src="app.js?v=28"></script>
+  <script src="app.js?v=29"></script>
 </body>
 
 </html>

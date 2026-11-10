@@ -785,6 +785,11 @@
       DOM.valUnbalPct.textContent = hasUnbal ? Number(data.v_unbal_pct).toFixed(1) + '%' : '--%';
     }
 
+    const hasIUnbal = (data.i_unbal_pct !== null && data.i_unbal_pct !== undefined);
+    if (DOM.valIUnbalPct) {
+      DOM.valIUnbalPct.textContent = hasIUnbal ? Number(data.i_unbal_pct).toFixed(1) + '%' : '--%';
+    }
+
     renderNemaVoltageBalance(data.voltage_balance, data.v_unbal_pct);
 
     // 4. v1.1: Arus Fasa 3-Fasa (i_l1/2/3)
@@ -800,21 +805,21 @@
     if (DOM.valPf) DOM.valPf.textContent = (data.pf !== null && data.pf !== undefined)
       ? formatNum(data.pf, 2) : '--';
 
-    // 6. v1.1: Ketidakseimbangan Arus NEMA (i_unbal_pct)
+    // 6. v1.1: Ketidakseimbangan Arus NEMA (i_unbal_pct) — simetris dengan badge tegangan tanpa dot
     if (DOM.badgeIUnbal) {
       const iu = data.i_unbal_pct;
       if (iu === null || iu === undefined) {
         DOM.badgeIUnbal.textContent = 'ARUS --';
-        DOM.badgeIUnbal.className = 'status-pill-small tier-nodata';
+        DOM.badgeIUnbal.className = 'voltage-badge';
       } else if (Number(iu) > 40) {
-        DOM.badgeIUnbal.textContent = 'ARUS KRITIS (>' + Number(iu).toFixed(1) + '%)';
-        DOM.badgeIUnbal.className = 'status-pill-small tier-critical';
+        DOM.badgeIUnbal.textContent = 'ARUS KRITIS (' + Number(iu).toFixed(1) + '%)';
+        DOM.badgeIUnbal.className = 'voltage-badge badge-nema-critical';
       } else if (Number(iu) > 20) {
         DOM.badgeIUnbal.textContent = 'ARUS ASIMETRIS (' + Number(iu).toFixed(1) + '%)';
-        DOM.badgeIUnbal.className = 'status-pill-small tier-major';
+        DOM.badgeIUnbal.className = 'voltage-badge badge-nema-warning';
       } else {
         DOM.badgeIUnbal.textContent = 'ARUS SEIMBANG (' + Number(iu).toFixed(1) + '%)';
-        DOM.badgeIUnbal.className = 'status-pill-small tier-normal';
+        DOM.badgeIUnbal.className = 'voltage-badge badge-nema-normal';
       }
     }
 
@@ -906,31 +911,31 @@
     }
   }
 
-  // evaluasi status ketidakseimbangan tegangan 3-fasa NEMA (konsolidasi threshold & teks status)
+  // evaluasi status ketidakseimbangan tegangan 3-fasa NEMA (konsolidasi threshold & teks status — simetris tanpa dot)
   function renderNemaVoltageBalance(balanceText, unbalancePct) {
     if (!DOM.badgeVoltageBalance || !DOM.textVoltageBalance) return;
 
     if (unbalancePct === null || unbalancePct === undefined) {
       DOM.badgeVoltageBalance.className = 'voltage-badge';
-      DOM.textVoltageBalance.textContent = balanceText || 'TEGANGAN --';
+      DOM.textVoltageBalance.textContent = 'TEGANGAN --';
       return;
     }
 
     const pct = parseFloat(unbalancePct) || 0;
     const up = String(balanceText || '').toUpperCase();
 
-    let text = balanceText;
+    let text = `TEGANGAN SEIMBANG (${pct.toFixed(1)}%)`;
     let badgeClass = 'badge-nema-normal';
 
     if (up.includes('CRIT') || up.includes('FAULT') || pct > 3.0) {
       badgeClass = 'badge-nema-critical';
-      text = text || 'CRITICAL (FAULT)';
+      text = `TEGANGAN KRITIS (${pct.toFixed(1)}%)`;
     } else if (up.includes('WARN') || up.includes('MAJOR') || pct > 2.0) {
       badgeClass = 'badge-nema-warning';
-      text = text || 'WARNING (UNBALANCED)';
+      text = `TEGANGAN ASIMETRIS (${pct.toFixed(1)}%)`;
     } else {
       badgeClass = 'badge-nema-normal';
-      text = text || 'SEIMBANG (NORMAL)';
+      text = `TEGANGAN SEIMBANG (${pct.toFixed(1)}%)`;
     }
 
     DOM.badgeVoltageBalance.className = `voltage-badge ${badgeClass}`;
