@@ -115,17 +115,6 @@
     valPf: document.getElementById('valPf'),
     badgeIUnbal: document.getElementById('badgeIUnbal'),
     valFuelVolL: document.getElementById('valFuelVolL'),
-    // v1.1 additions: settings modal
-    btnOpenSettings: document.getElementById('btnOpenSettings'),
-    settingsModal: document.getElementById('settingsModal'),
-    btnCloseSettings: document.getElementById('btnCloseSettings'),
-    btnCancelSettings: document.getElementById('btnCancelSettings'),
-    btnSaveSettings: document.getElementById('btnSaveSettings'),
-    inputHost: document.getElementById('inputHost'),
-    inputDeviceId: document.getElementById('inputDeviceId'),
-    inputUsername: document.getElementById('inputUsername'),
-    inputPassword: document.getElementById('inputPassword'),
-    inputToken: document.getElementById('inputToken'),
 
     // Panel 2: Timeseries Chart & Legend Items
     chartCanvas: document.getElementById('gmsTimeseriesChart'),
@@ -1771,67 +1760,12 @@
       else if (k === 'c') window.gmsSimulate('normal');
     });
 
-    // Settings modal: buka dengan gear button ⚙️
-    if (DOM.btnOpenSettings) {
-      DOM.btnOpenSettings.addEventListener('click', openSettingsModal);
-    }
-    if (DOM.btnCloseSettings) {
-      DOM.btnCloseSettings.addEventListener('click', function () {
-        if (DOM.settingsModal) DOM.settingsModal.classList.add('hidden');
-      });
-    }
-    if (DOM.btnCancelSettings) {
-      DOM.btnCancelSettings.addEventListener('click', function () {
-        if (DOM.settingsModal) DOM.settingsModal.classList.add('hidden');
-      });
-    }
-    if (DOM.btnSaveSettings) {
-      DOM.btnSaveSettings.addEventListener('click', saveSettings);
-    }
-    // Klik backdrop (di luar modal card) menutup modal
-    if (DOM.settingsModal) {
-      DOM.settingsModal.addEventListener('click', function (e) {
-        if (e.target === DOM.settingsModal) DOM.settingsModal.classList.add('hidden');
-      });
-    }
-
     // Cek juga URL parameter ?sim=temp / ?sim=oil untuk kemudahan demo
     try {
       const urlParams = new URLSearchParams(window.location.search);
       const sim = urlParams.get('sim');
       if (sim) window.gmsSimulate(sim);
     } catch (_) { }
-  }
-
-  function openSettingsModal() {
-    if (!DOM.settingsModal) return;
-    if (DOM.inputHost) DOM.inputHost.value = state.config.mastifyHost || '';
-    if (DOM.inputDeviceId) DOM.inputDeviceId.value = state.config.deviceId || '';
-    if (DOM.inputUsername) DOM.inputUsername.value = safeGetStorage('GMS_USERNAME') || state.config.username || '';
-    if (DOM.inputPassword) DOM.inputPassword.value = safeGetStorage('GMS_PASSWORD') || state.config.password || '';
-    if (DOM.inputToken) DOM.inputToken.value = safeGetStorage('GMS_JWT_TOKEN') || state.config.jwtToken || '';
-    DOM.settingsModal.classList.remove('hidden');
-  }
-
-  function saveSettings() {
-    if (DOM.inputHost && DOM.inputHost.value.trim()) {
-      state.config.mastifyHost = DOM.inputHost.value.trim();
-    }
-    if (DOM.inputDeviceId && DOM.inputDeviceId.value.trim()) {
-      state.config.deviceId = DOM.inputDeviceId.value.trim();
-    }
-    const u = DOM.inputUsername ? DOM.inputUsername.value.trim() : '';
-    const p = DOM.inputPassword ? DOM.inputPassword.value.trim() : '';
-    const t = DOM.inputToken ? DOM.inputToken.value.trim() : '';
-
-    if (u) { state.config.username = u; safeSetStorage('GMS_USERNAME', u); }
-    if (p) { state.config.password = p; safeSetStorage('GMS_PASSWORD', p); }
-    if (t) { state.config.jwtToken = t; safeSetStorage('GMS_JWT_TOKEN', t); }
-
-    if (DOM.settingsModal) DOM.settingsModal.classList.add('hidden');
-    console.info('[GMS Settings] Konfigurasi disimpan. Host:', state.config.mastifyHost, '| DeviceId:', state.config.deviceId);
-    // Langsung coba konek dengan konfigurasi baru
-    if (state.currentMode === MODES.LIVE) executeTelemetryCycle();
   }
 
   async function initApplication() {
