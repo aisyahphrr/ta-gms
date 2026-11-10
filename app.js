@@ -382,10 +382,18 @@
     }
 
     const rawRunHours = safeNum(getLatestVal('run_hours', 'hourMeter', 'runHours'));
-    const rawMaintDue = safeNum(getLatestVal('maint_due_h', 'maintenanceDueHours', 'maintDue'));
+    let rawMaintDue = safeNum(getLatestVal('maint_due_h', 'maintenanceDueHours', 'maintDue'));
+    if ((rawMaintDue === null || rawMaintDue === undefined) && rawRunHours !== null && rawRunHours !== undefined) {
+      // Buku Induk Spesifikasi Section 3.K: maint_due_h = 250 - (run_hours % 250)
+      rawMaintDue = parseFloat((250 - (rawRunHours % 250)).toFixed(1));
+    }
     let parsedMaintStatus = getLatestVal('maintenance_status', 'maintenanceStatus', 'maint_status', 'maintStatus');
     if (parsedMaintStatus && typeof parsedMaintStatus === 'string') {
       parsedMaintStatus = parsedMaintStatus.trim();
+    } else if (rawMaintDue !== null && rawMaintDue !== undefined) {
+      if (rawMaintDue <= 0) parsedMaintStatus = 'JATUH TEMPO (SERVIS)';
+      else if (rawMaintDue <= 20.0) parsedMaintStatus = 'PERLU SERVIS SEGERA';
+      else parsedMaintStatus = 'TERJADWAL (NORMAL)';
     } else {
       parsedMaintStatus = null;
     }
@@ -398,6 +406,67 @@
     const vL1 = safeNum(getLatestVal('v_l1_n', 'v_l1', 'v_11'));
     const vL2 = safeNum(getLatestVal('v_l2_n', 'v_l2', 'v_12'));
     const vL3 = safeNum(getLatestVal('v_l3_n', 'v_l3', 'v_13'));
+    const iL1 = safeNum(getLatestVal('i_l1', 'i_1', 'i_r'));
+    const iL2 = safeNum(getLatestVal('i_l2', 'i_2', 'i_s'));
+    const iL3 = safeNum(getLatestVal('i_l3', 'i_3', 'i_t'));
+
+    // Hitung NEMA Voltage Unbalance otomatis jika tidak disediakan oleh Mastify/gateway
+    let vUnbal = safeNum(getLatestVal('v_unbal_pct', 'voltage_unbalance', 'unbalance'));
+    if ((vUnbal === null || vUnbal === undefined) && vL1 !== null && vL2 !== null && vL3 !== null) {
+      const vAvg = (vL1 + vL2 + vL3) / 3;
+      if (vAvg > 0) {
+        const maxDevV = Math.max(Math.abs(vL1 - vAvg), Math.abs(vL2 - vAvg), Math.abs(vL3 - vAvg));
+        vUnbal = parseFloat(((maxDevV / vAvg) * 100).toFixed(1));
+      } else {
+        vUnbal = 0.0;
+      }
+    }
+
+    let voltBalanceText = getLatestVal('voltage_balance') || null;
+    if (!voltBalanceText && vUnbal !== null && vUnbal !== undefined) {
+      if (vUnbal > 3.0) voltBalanceText = 'CRITICAL (FAULT)';
+      else if (vUnbal > 2.0) voltBalanceText = 'WARNING (MAJOR)';
+      else voltBalanceText = 'SEIMBANG (NORMAL)';
+    }
+
+    // Hitung NEMA Current Unbalance otomatis jika tidak disediakan oleh Mastify/gateway
+    let iUnbal = safeNum(getLatestVal('i_unbal_pct'));
+    if ((iUnbal === null || iUnbal === undefined) && iL1 !== null && iL2 !== null && iL3 !== null) {
+      const iAvg = (iL1 + iL2 + iL3) / 3;
+      if (iAvg > 0) {
+        const maxDevI = Math.max(Math.abs(iL1 - iAvg), Math.abs(iL2 - iAvg), Math.abs(iL3 - iAvg));
+        iUnbal = parseFloat(((maxDevI / iAvg) * 100).toFixed(1));
+      } else {
+        iUnbal = 0.0;
+      }
+    }
+
+    // Hitung Load Pct otomatis jika pKw ada namun load_pct tidak dikirim (Kapasitas genset 44 kW)
+    let loadPct = safeNum(getLatestVal('load_pct', 'load'));
+    if ((loadPct === null || loadPct === undefined) && pKw !== null && pKw !== undefined) {
+      const ratedKw = 44.0;
+      loadPct = parseFloat(((pKw / ratedKw) * 100).toFixed(1));
+    }
+    let loadStatus = getLatestVal('load_status') || null;
+    if (!loadStatus && loadPct !== null && loadPct !== undefined) {
+      if (loadPct > 100) loadStatus = 'OVERLOAD';
+      else if (loadPct < 30) loadStatus = 'UNDERLOAD';
+      else loadStatus = 'OPTIMAL';
+    }
+
+    // Hitung estimasi volume solar jika hanya fuel_level_mm yang dikirim (0.507 L/mm)
+    const fuelMmVal = safeNum(getLatestVal('fuel_level_mm'));
+    let fuelVolVal = safeNum(getLatestVal('fuel_vol_l'));
+    if ((fuelVolVal === null || fuelVolVal === undefined) && fuelMmVal !== null && fuelMmVal !== undefined) {
+      fuelVolVal = parseFloat((fuelMmVal * 0.507).toFixed(1));
+    }
+
+    // Hitung estimasi konsumsi BBM kumulatif (Model SFC Genset: Section 3.I Buku Induk)
+    let fuelEstVal = safeNum(getLatestVal('fuel_est_l', 'fuelEstimate'));
+    if ((fuelEstVal === null || fuelEstVal === undefined) && rawRunHours !== null && rawRunHours > 0) {
+      const activeKw = (pKw !== null && pKw > 0) ? pKw : 22.0;
+      fuelEstVal = parseFloat((rawRunHours * activeKw * 0.24).toFixed(1));
+    }
 
     return {
       // A. Engine & Mekanikal
@@ -408,15 +477,15 @@
       coolant_temp_c: coolantTemp,
       engine_temp_c: coolantTemp,
       temp_status: getLatestVal('temp_status') || null,
-      fuel_level_mm: safeNum(getLatestVal('fuel_level_mm', 'fuel_vol_l')),
-      fuel_vol_l: safeNum(getLatestVal('fuel_vol_l')),
+      fuel_level_mm: fuelMmVal !== null ? fuelMmVal : safeNum(getLatestVal('fuel_vol_l')),
+      fuel_vol_l: fuelVolVal,
       fuel_status: getLatestVal('fuel_status') || null,
       batt_volt_v: battVolt,
       battery_v: battVolt,
       run_hours: rawRunHours,
       maint_due_h: rawMaintDue,
       maintenance_status: parsedMaintStatus,
-      fuel_est_l: safeNum(getLatestVal('fuel_est_l', 'fuelEstimate')),
+      fuel_est_l: fuelEstVal,
 
       // B. Kelistrikan 3-Fasa AC
       v_l1_n: vL1,
@@ -428,20 +497,20 @@
       v_l1_l2: safeNum(getLatestVal('v_l1_l2')),
       v_l2_l3: safeNum(getLatestVal('v_l2_l3')),
       v_l3_l1: safeNum(getLatestVal('v_l3_l1')),
-      v_unbal_pct: safeNum(getLatestVal('v_unbal_pct', 'voltage_unbalance', 'unbalance')),
-      voltage_balance: getLatestVal('voltage_balance') || null,
-      i_l1: safeNum(getLatestVal('i_l1')),
-      i_l2: safeNum(getLatestVal('i_l2')),
-      i_l3: safeNum(getLatestVal('i_l3')),
-      i_unbal_pct: safeNum(getLatestVal('i_unbal_pct')),
-      i_unbal_avg_15m: safeNum(getLatestVal('i_unbal_avg_15m')),
+      v_unbal_pct: vUnbal,
+      voltage_balance: voltBalanceText,
+      i_l1: iL1,
+      i_l2: iL2,
+      i_l3: iL3,
+      i_unbal_pct: iUnbal,
+      i_unbal_avg_15m: safeNum(getLatestVal('i_unbal_avg_15m')) !== null ? safeNum(getLatestVal('i_unbal_avg_15m')) : iUnbal,
       freq_hz: safeNum(getLatestVal('freq_hz')),
       p_total_kw: pKw,
       p_kw: pKw,
       s_total_kva: sKva,
       s_kva: sKva,
-      load_pct: safeNum(getLatestVal('load_pct', 'load')),
-      load_status: getLatestVal('load_status') || null,
+      load_pct: loadPct,
+      load_status: loadStatus,
       pf_avg: pfAvg,
       pf: pfAvg,
 
@@ -1223,11 +1292,22 @@
       DOM.barMaintProgress.style.width = '0%';
     }
 
-    const rawStatus = data.maintenance_status ? String(data.maintenance_status).trim() : null;
+    let rawStatus = data.maintenance_status ? String(data.maintenance_status).trim() : null;
+    if (!rawStatus && hasDue) {
+      const dueHours = Number(data.maint_due_h);
+      if (dueHours <= 0) {
+        rawStatus = 'JATUH TEMPO (SERVIS)';
+      } else if (dueHours <= 20.0) {
+        rawStatus = 'PERLU SERVIS SEGERA';
+      } else {
+        rawStatus = 'TERJADWAL (NORMAL)';
+      }
+    }
+
     if (rawStatus) {
       const statusUpper = rawStatus.toUpperCase();
       DOM.badgeMaintStatus.textContent = rawStatus;
-      if (statusUpper.includes('SERVIS') || statusUpper.includes('CRIT') || statusUpper.includes('KADALUARSA')) {
+      if (statusUpper.includes('JATUH TEMPO') || statusUpper.includes('CRIT') || statusUpper.includes('KADALUARSA')) {
         DOM.badgeMaintStatus.className = 'maint-status-badge badge-maint-critical';
       } else if (statusUpper.includes('PERLU') || statusUpper.includes('SEGERA') || statusUpper.includes('WARN')) {
         DOM.badgeMaintStatus.className = 'maint-status-badge badge-maint-warn';
