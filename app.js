@@ -837,20 +837,21 @@
   }
 
   // evaluasi rule chain lokal — dipakai di offline mode & sebagai fallback jika Mastify API kosong
-  // Ambang batas alarm operasional genset
+  // Ambang batas alarm operasional genset 
   function evaluateTelemetryAlarms(t, timeStr) {
     if (!t) return [];
     const alarms = [];
     const time = timeStr || new Date().toLocaleTimeString('id-ID', { hour: '2-digit', minute: '2-digit', second: '2-digit' });
 
     // Konversi nilai parameter telemetri
-    const temp = Number(t.engine_temp_c);
+    const temp = Number(t.engine_temp_c !== undefined ? t.engine_temp_c : t.coolant_temp_c);
     const press = Number(t.oil_press_bar);
+    const isEngineRunning = (t.engine_state === 'RUNNING');
 
     // 1. Sensor Fault NAMUR NE43 Check (Prioritas Utama)
-    const isTempSensorFault = (t.temp_status === 'SENSOR_FAULT' || temp < -50);
-    const isPressSensorFault = (t.press_status === 'SENSOR_FAULT' || press < -50);
-    const isFuelSensorFault = (t.fuel_status === 'SENSOR_FAULT');
+    const isTempSensorFault = (t.temp_status === 'SENSOR_FAULT' || temp < -50 || t.ai2_st === 'FAULT_LOW' || t.ai2_st === 'FAULT_HIGH');
+    const isPressSensorFault = (t.press_status === 'SENSOR_FAULT' || press < -50 || t.ai1_st === 'FAULT_LOW' || t.ai1_st === 'FAULT_HIGH');
+    const isFuelSensorFault = (t.fuel_status === 'SENSOR_FAULT' || t.ai3_st === 'FAULT_LOW' || t.ai3_st === 'FAULT_HIGH');
 
     if (t.sensor_fault === true || isTempSensorFault || isPressSensorFault || isFuelSensorFault) {
       let sensorName = 'Transmisi 4-20mA';
@@ -861,76 +862,82 @@
       alarms.push({
         timestamp: time,
         level: 'MAJOR',
-        ruleType: 'SENSOR_FAULT',
-        message: `Arus loop transmisi 4-20mA sensor (${sensorName}) di luar rentang standar NAMUR NE43 (< 3.6mA / > 21.0mA). Indikasi kabel putus atau short circuit.`,
+        ruleType: 'SENSOR_FAULT_AI1',
+        message: `Arus loop transmisi 4-20mA sensor (${sensorName}) di luar rentang standar NAMUR NE43 (< 3.8mA / > 20.5mA). Indikasi kabel putus atau short circuit.`,
         ruleStatus: 'ACTIVE'
       });
     }
 
-    // 2. Suhu Coolant (engine_temp_c) - Dievaluasi jika sensor normal
+    // 2. Suhu Coolant (engine_temp_c) - Dievaluasi jika sensor normal (Batas: > 90°C Major, > 100°C Critical)
     if (!isNaN(temp) && !isTempSensorFault) {
-      if (temp >= 95.0 || t.temp_status === 'CRITICAL') {
+      if (temp > 100.0 || t.temp_status === 'CRITICAL') {
         alarms.push({
           timestamp: time,
           level: 'CRITICAL',
           ruleType: 'ENGINE_TEMP',
-          message: `Suhu pendingin engine sangat tinggi (${temp.toFixed(1)}°C >= 95.0°C). Risiko overheat fatal & engine seizure!`,
+          message: `Suhu pendingin engine sangat tinggi (${temp.toFixed(1)}°C > 100.0°C). Risiko overheat fatal & engine seizure!`,
           ruleStatus: 'ACTIVE'
         });
-      } else if (temp >= 85.0 || t.temp_status === 'MAJOR') {
+      } else if (temp > 90.0 || t.temp_status === 'MAJOR') {
         alarms.push({
           timestamp: time,
           level: 'MAJOR',
           ruleType: 'ENGINE_TEMP',
-          message: `Suhu pendingin engine melebihi ambang batas aman (${temp.toFixed(1)}°C >= 85.0°C). Sirkulasi radiator perlu dicek.`,
+          message: `Suhu pendingin engine melebihi ambang batas aman (${temp.toFixed(1)}°C > 90.0°C). Sirkulasi radiator perlu dicek.`,
           ruleStatus: 'ACTIVE'
         });
       }
     }
 
-    // 3. Tekanan Pelumas / Oli (oil_press_bar) - Dievaluasi saat mesin RUNNING dan sensor normal
-    const isEngineRunning = (t.engine_state === 'RUNNING');
+    // 3. Tekanan Pelumas / Oli (oil_press_bar) - Dievaluasi saat RUNNING (Batas: < 2.5 / > 5.0 bar Critical, < 3.5 / > 4.5 bar Major)
     if (!isNaN(press) && isEngineRunning && !isPressSensorFault) {
-      if (press < 1.8 || t.press_status === 'CRITICAL') {
+      if (press < 2.5 || press > 5.0 || t.press_status === 'CRITICAL') {
         alarms.push({
           timestamp: time,
           level: 'CRITICAL',
           ruleType: 'OIL_PRESSURE',
-          message: `Tekanan oli pelumas anjlok di bawah batas aman (< 1.8 bar: ${press.toFixed(2)} bar). Bahaya keausan fatal bearing!`,
+          message: `Tekanan oli pelumas di luar batas kritis (< 2.5 bar atau > 5.0 bar: ${press.toFixed(2)} bar). Bahaya fatal pelumasan!`,
           ruleStatus: 'ACTIVE'
         });
-      } else if (press < 2.5 || t.press_status === 'MAJOR') {
+      } else if (press < 3.5 || press > 4.5 || t.press_status === 'MAJOR') {
         alarms.push({
           timestamp: time,
           level: 'MAJOR',
           ruleType: 'OIL_PRESSURE',
-          message: `Tekanan oli pelumas di bawah batas nominal (< 2.5 bar: ${press.toFixed(2)} bar). Periksa filter oli dan pompa.`,
+          message: `Tekanan oli pelumas menyimpang dari batas aman 3.5-4.5 bar (${press.toFixed(2)} bar). Periksa filter oli dan pompa.`,
           ruleStatus: 'ACTIVE'
         });
       }
     }
 
-    // 4. Ketidakseimbangan Tegangan 3-Fasa NEMA & Phase Loss
+    // 4. Tegangan Fasa & Ketidakseimbangan NEMA (Batas: < 190 / > 235V Critical, < 200 / > 230V Major)
     const unbal = Number(t.v_unbal_pct !== undefined ? t.v_unbal_pct : 0);
-    const v1 = Number(t.v_l1 !== undefined ? t.v_l1 : t.v_11 || 0);
-    const v2 = Number(t.v_l2 !== undefined ? t.v_l2 : t.v_12 || 0);
-    const v3 = Number(t.v_l3 !== undefined ? t.v_l3 : t.v_13 || 0);
+    const v1 = Number(t.v_l1 !== undefined ? t.v_l1 : (t.v_l1_n || t.v_11 || 0));
+    const v2 = Number(t.v_l2 !== undefined ? t.v_l2 : (t.v_l2_n || t.v_12 || 0));
+    const v3 = Number(t.v_l3 !== undefined ? t.v_l3 : (t.v_l3_n || t.v_13 || 0));
 
     if (isEngineRunning) {
-      if ((v1 > 0 && v1 < 190.0) || (v2 > 0 && v2 < 190.0) || (v3 > 0 && v3 < 190.0)) {
+      const isVoltCrit = (v1 > 0 && (v1 < 190.0 || v1 > 235.0)) ||
+        (v2 > 0 && (v2 < 190.0 || v2 > 235.0)) ||
+        (v3 > 0 && (v3 < 190.0 || v3 > 235.0));
+      const isVoltMajor = (v1 > 0 && (v1 < 200.0 || v1 > 230.0)) ||
+        (v2 > 0 && (v2 < 200.0 || v2 > 230.0)) ||
+        (v3 > 0 && (v3 < 200.0 || v3 > 230.0));
+
+      if (isVoltCrit) {
         alarms.push({
           timestamp: time,
           level: 'CRITICAL',
           ruleType: 'VOLTAGE_FAULT',
-          message: `Tegangan fasa anjlok di bawah batas minimum (< 190V: L1=${v1.toFixed(1)}V, L2=${v2.toFixed(1)}V, L3=${v3.toFixed(1)}V). Potensi fasa hilang!`,
+          message: `Tegangan fasa di luar batas kritis (< 190V atau > 235V: L1=${v1.toFixed(1)}V, L2=${v2.toFixed(1)}V, L3=${v3.toFixed(1)}V). Potensi anomali AVR/phase loss!`,
           ruleStatus: 'ACTIVE'
         });
-      } else if (v1 > 250.0 || v2 > 250.0 || v3 > 250.0) {
+      } else if (isVoltMajor) {
         alarms.push({
           timestamp: time,
-          level: 'CRITICAL',
+          level: 'MAJOR',
           ruleType: 'VOLTAGE_FAULT',
-          message: `Tegangan fasa melebihi ambang batas aman (> 250V). Anomali AVR alternator terdeteksi!`,
+          message: `Tegangan fasa menyimpang dari nominal 220V (< 200V atau > 230V: L1=${v1.toFixed(1)}V, L2=${v2.toFixed(1)}V, L3=${v3.toFixed(1)}V).`,
           ruleStatus: 'ACTIVE'
         });
       } else if (unbal > 3.0) {
@@ -952,15 +959,15 @@
       }
     }
 
-    // 5. Frekuensi Alternator (freq_hz)
+    // 5. Frekuensi Alternator (freq_hz) - Batas: < 48 / > 52 Hz Critical, < 49 / > 51 Hz Major
     const freq = Number(t.freq_hz);
     if (!isNaN(freq) && isEngineRunning && freq > 0) {
-      if (freq < 47.5 || freq > 52.5) {
+      if (freq < 48.0 || freq > 52.0) {
         alarms.push({
           timestamp: time,
           level: 'CRITICAL',
           ruleType: 'FREQ_FAULT',
-          message: `Frekuensi alternator di luar batas toleransi operasi (${freq.toFixed(1)} Hz). Batas normal: 47.5 - 52.5 Hz.`,
+          message: `Frekuensi alternator kritis di luar batas (< 48.0 atau > 52.0 Hz: ${freq.toFixed(2)} Hz). Risiko kerusakan beban!`,
           ruleStatus: 'ACTIVE'
         });
       } else if (freq < 49.0 || freq > 51.0) {
@@ -968,36 +975,81 @@
           timestamp: time,
           level: 'MAJOR',
           ruleType: 'FREQ_FAULT',
-          message: `Frekuensi alternator menyimpang dari nominal 50.0 Hz (${freq.toFixed(1)} Hz). Governor mesin perlu dicek.`,
+          message: `Frekuensi alternator menyimpang dari nominal 50.0 Hz (${freq.toFixed(2)} Hz). Governor mesin perlu dicek.`,
           ruleStatus: 'ACTIVE'
         });
       }
     }
 
-    // 6. Level Tangki Solar (fuel_level_mm)
+    // 6. Level Tangki Solar (fuel_level_mm) - Batas: < 200mm Critical, < 400mm Major
     const fuelMm = Number(t.fuel_level_mm);
-    if (!isNaN(fuelMm) && fuelMm > 0) {
-      if (fuelMm < 150 || t.fuel_status === 'CRITICAL') {
+    const isLevelCalibrated = (t.level_calibrated !== undefined) ? Boolean(t.level_calibrated) : true;
+    if (!isNaN(fuelMm) && fuelMm > 0 && isLevelCalibrated) {
+      if (fuelMm < 200.0 || t.fuel_status === 'CRITICAL') {
         alarms.push({
           timestamp: time,
           level: 'CRITICAL',
           ruleType: 'FUEL_LEVEL',
-          message: `Level solar tangki genset sangat rendah (< 150 mm: ${Math.round(fuelMm)} mm). Mesin berisiko kehabisan solar!`,
+          message: `Level solar tangki genset kritis (< 10% / < 200 mm: ${Math.round(fuelMm)} mm). Mesin berisiko kehabisan solar!`,
           ruleStatus: 'ACTIVE'
         });
-      } else if (fuelMm < 300 || t.fuel_status === 'LOW') {
+      } else if (fuelMm < 400.0 || t.fuel_status === 'LOW' || t.fuel_status === 'MAJOR') {
         alarms.push({
           timestamp: time,
           level: 'MAJOR',
           ruleType: 'FUEL_LEVEL',
-          message: `Level solar tangki genset di bawah batas aman (< 300 mm: ${Math.round(fuelMm)} mm). Diperlukan pengisian solar.`,
+          message: `Level solar tangki genset di bawah batas aman (< 20% / < 400 mm: ${Math.round(fuelMm)} mm). Diperlukan pengisian solar.`,
           ruleStatus: 'ACTIVE'
         });
       }
     }
 
-    // 7. Tegangan Baterai / Aki (battery_v)
-    const battV = Number(t.battery_v);
+    // 7. Pembebanan Genset (load_pct) - Batas: > 80% Critical, > 70% Major
+    const load = Number(t.load_pct);
+    if (!isNaN(load) && isEngineRunning) {
+      if (load > 80.0 || t.load_status === 'CRITICAL') {
+        alarms.push({
+          timestamp: time,
+          level: 'CRITICAL',
+          ruleType: 'LOAD_FAULT',
+          message: `Beban genset melebihi batas kritis (> 80% kapasitas: ${load.toFixed(1)}%). Risiko tripping kontaktor!`,
+          ruleStatus: 'ACTIVE'
+        });
+      } else if (load > 70.0 || t.load_status === 'MAJOR') {
+        alarms.push({
+          timestamp: time,
+          level: 'MAJOR',
+          ruleType: 'LOAD_FAULT',
+          message: `Beban genset tinggi melebihi 70% kapasitas (${load.toFixed(1)}%). Perhatikan beban puncak.`,
+          ruleStatus: 'ACTIVE'
+        });
+      }
+    }
+
+    // 8. Ketidakseimbangan Arus 3-Fasa (Current Imbalance 15-Menit & Instant) - Batas: > 40% Critical, > 20% Major
+    const iUnbal = Number(t.i_unbal_avg_15m !== undefined ? t.i_unbal_avg_15m : (t.i_unbal_pct || 0));
+    if (isEngineRunning && !isNaN(iUnbal) && iUnbal > 0) {
+      if (iUnbal > 40.0) {
+        alarms.push({
+          timestamp: time,
+          level: 'CRITICAL',
+          ruleType: 'CURRENT_IMBALANCE',
+          message: `Ketidakseimbangan arus 3-fasa rata-rata kritis (${iUnbal.toFixed(1)}% > 40.0%). Beban fasa sangat tidak seimbang!`,
+          ruleStatus: 'ACTIVE'
+        });
+      } else if (iUnbal > 20.0) {
+        alarms.push({
+          timestamp: time,
+          level: 'MAJOR',
+          ruleType: 'CURRENT_IMBALANCE',
+          message: `Ketidakseimbangan arus 3-fasa rata-rata tinggi (${iUnbal.toFixed(1)}% > 20.0%). Diperlukan redistribusi beban fasa.`,
+          ruleStatus: 'ACTIVE'
+        });
+      }
+    }
+
+    // 9. Tegangan Baterai / Aki (battery_v) - Batas: < 24.0 V Major
+    const battV = Number(t.battery_v !== undefined ? t.battery_v : t.batt_volt_v);
     if (!isNaN(battV) && battV > 0 && battV < 24.0) {
       alarms.push({
         timestamp: time,
@@ -1008,19 +1060,7 @@
       });
     }
 
-    // 8. Overload Genset (load_pct)
-    const load = Number(t.load_pct);
-    if (!isNaN(load) && load > 100.0) {
-      alarms.push({
-        timestamp: time,
-        level: 'CRITICAL',
-        ruleType: 'LOAD_OVERLOAD',
-        message: `Beban genset melebihi 100% kapasitas nominal (${load.toFixed(1)}% > 100%). Risiko breaker trip!`,
-        ruleStatus: 'ACTIVE'
-      });
-    }
-
-    // 9. Engine State FAULT
+    // 10. Engine State FAULT
     if (t.engine_state === 'FAULT') {
       alarms.push({
         timestamp: time,
