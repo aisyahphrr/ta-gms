@@ -756,7 +756,8 @@
 
   // Mengambil daftar alarm aktif langsung dari server Mastify
   async function fetchMastifyAlarms() {
-    const url = getMastifyApiEndpoint(`/alarm/DEVICE/${state.config.deviceId}?status=ACTIVE_UNACK&pageSize=10&page=0&sortProperty=createdTime&sortOrder=DESC`);
+    // Ambil ACTIVE_UNACK dan ACTIVE_ACK sekaligus agar alarm yg sudah di-ACK tidak hilang saat refresh
+    const url = getMastifyApiEndpoint(`/alarm/DEVICE/${state.config.deviceId}?pageSize=20&page=0&sortProperty=createdTime&sortOrder=DESC`);
 
     try {
       const res = await apiClient.get(url);
@@ -1133,6 +1134,7 @@
     });
 
     // transisi ke CLEARED jika kondisi telemetri sudah normal kembali
+    // ACTIVE_ACK tidak di-CLEAR paksa di sini — biarkan Mastify yang tentukan clearTs-nya
     state.alarmLog.forEach(item => {
       if ((item.ruleStatus === 'ACTIVE' || item.ruleStatus === 'ACTIVE_UNACK') && !activeRuleMap.has(item.ruleType)) {
         item.ruleStatus = 'CLEARED';
