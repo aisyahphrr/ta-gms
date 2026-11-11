@@ -221,7 +221,7 @@
   }
 
   // ===========================================================================
-  // 4. PEMUATAN KONFIGURASI DARI .env 
+  // 4. PEMUATAN KONFIGURASI (URL Params → localStorage → DEFAULT_CONFIG)
   // ===========================================================================
   async function loadEnvironmentConfig() {
     // Prioritaskan parameter URL (?token= / ?jwt=) jika disediakan
@@ -259,31 +259,8 @@
     if (!state.config.deviceId) state.config.deviceId = DEFAULT_CONFIG.deviceId;
     if (!state.config.mastifyHost) state.config.mastifyHost = DEFAULT_CONFIG.mastifyHost;
 
-    // fetch .env lokal jika tersedia (localhost); 404 wajar saat deploy di cloud/Vercel
-    try {
-      const response = await fetch('./.env', { cache: 'no-store' });
-      if (response.ok) {
-        const text = await response.text();
-        text.split('\n').forEach(function (line) {
-          const trimmed = line.trim();
-          if (!trimmed || trimmed.startsWith('#')) return;
-          const separatorIdx = trimmed.indexOf('=');
-          if (separatorIdx === -1) return;
-
-          const key = trimmed.substring(0, separatorIdx).trim();
-          const value = trimmed.substring(separatorIdx + 1).trim();
-
-          if (key === 'MASTIFY_HOST') state.config.mastifyHost = value;
-          if (key === 'MASTIFY_DEVICE_ID') state.config.deviceId = value;
-          if (key === 'MASTIFY_JWT_TOKEN' && !state.config.jwtToken) state.config.jwtToken = value;
-          if (key === 'MASTIFY_USERNAME') state.config.username = value;
-          if (key === 'MASTIFY_PASSWORD') state.config.password = value;
-          if (key === 'POLLING_INTERVAL_MS') state.config.pollingIntervalMs = parseInt(value, 10) || 3000;
-        });
-      }
-    } catch (_) {
-      // Normal saat di cloud / Vercel
-    }
+    // Konfigurasi diambil dari URL params, localStorage, dan DEFAULT_CONFIG di atas.
+    // Tidak ada fetch .env — file .env tidak tersedia di browser (Vercel memblokir akses ke file ini).
 
     // Pastikan kita punya JWT Token yang valid. Jika belum ada, otomatis login sekarang di background!
     if (!state.config.jwtToken && state.config.username && state.config.password) {
