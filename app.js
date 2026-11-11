@@ -805,6 +805,7 @@
 
         return {
           id: alarmId,
+          isServerAlarm: true, // Alarm resmi server Mastify
           timestamp: timeStr,
           level: normalizeSeverityTier(item.severity),
           ruleType: formatAlarmRuleName(item.type),
@@ -819,27 +820,26 @@
   }
 
   // Acknowledge alarm ke Mastify API (POST /api/alarm/{id}/ack)
+  // Hanya berlaku untuk alarm resmi yang memiliki ID dari server Mastify
   async function acknowledgeAlarm(alarmId) {
     if (!alarmId) return;
-
-    if (state.currentMode === MODES.OFFLINE) {
-      // Offline: hapus dari state.alarmLog untuk simulasi
-      state.alarmLog = state.alarmLog.filter(function (a) { return a.id !== alarmId && a.ruleType !== alarmId; });
-      renderAlarmSystem([], 'Offline Demo — Alarm Acknowledged (Local)');
-      return;
-    }
 
     const url = getMastifyApiEndpoint('/alarm/' + alarmId + '/ack');
     try {
       await apiClient.post(url, {});
-      console.info('[GMS Alarm] Acknowledge berhasil untuk alarmId:', alarmId);
-      // Re-fetch alarm setelah ack berhasil
+      console.info('[GMS Alarm] Acknowledge berhasil ke Mastify untuk alarmId:', alarmId);
+      // Perbarui status lokal langsung ke ACTIVE_ACK
+      const target = state.alarmLog.find(function (a) { return a.id === alarmId; });
+      if (target) {
+        target.ruleStatus = 'ACTIVE_ACK';
+      }
+      // Re-fetch alarm resmi dari server Mastify
       const freshAlarms = await fetchMastifyAlarms();
       if (freshAlarms !== null) {
-        renderAlarmSystem(freshAlarms, 'Mastify Alarm API — Setelah Acknowledge');
+        renderAlarmSystem(freshAlarms, 'Mastify Live Alarm API');
       }
     } catch (err) {
-      console.warn('[GMS Alarm] Gagal acknowledge alarm:', err.message);
+      console.warn('[GMS Alarm] Gagal acknowledge alarm ke Mastify:', err.message);
     }
   }
 
@@ -1141,7 +1141,7 @@
       });
     }
 
-    return alarms;
+    return alarms.map(a => Object.assign({ id: null, isServerAlarm: false }, a));
   }
 
   // render tabel alarm aktif & riwayat perubahan status (5 kolom teknis)
@@ -1157,27 +1157,35 @@
 
     // transisi ke CLEARED jika kondisi telemetri sudah normal kembali
     state.alarmLog.forEach(item => {
-      if (item.ruleStatus === 'ACTIVE' && !activeRuleMap.has(item.ruleType)) {
+      if ((item.ruleStatus === 'ACTIVE' || item.ruleStatus === 'ACTIVE_UNACK') && !activeRuleMap.has(item.ruleType)) {
         item.ruleStatus = 'CLEARED';
         item.timestamp = timeStr;
         item.message = `Parameter ${item.ruleType} telah kembali normal dalam batas toleransi aman.`;
       }
     });
 
-    // update timestamp jika alarm masih aktif, atau unshift alarm baru
+    // update timestamp jika alarm masih aktif, atau unshift alarm baru (anti-duplikasi)
     activeList.forEach(newAlarm => {
-      const existing = state.alarmLog.find(item => item.ruleType === newAlarm.ruleType && item.ruleStatus === 'ACTIVE');
+      const existing = state.alarmLog.find(item => item.ruleType === newAlarm.ruleType && 
+        (item.ruleStatus === 'ACTIVE' || item.ruleStatus === 'ACTIVE_UNACK' || item.ruleStatus === 'ACTIVE_ACK'));
       if (existing) {
+        existing.id = newAlarm.id || existing.id;
+        existing.isServerAlarm = newAlarm.isServerAlarm !== undefined ? newAlarm.isServerAlarm : existing.isServerAlarm;
         existing.message = newAlarm.message;
         existing.timestamp = newAlarm.timestamp || timeStr;
         existing.level = newAlarm.level;
+        if (existing.ruleStatus !== 'ACTIVE_ACK') {
+          existing.ruleStatus = newAlarm.ruleStatus || 'ACTIVE';
+        }
       } else {
         state.alarmLog.unshift({
+          id: newAlarm.id || null,
+          isServerAlarm: Boolean(newAlarm.isServerAlarm),
           timestamp: newAlarm.timestamp || timeStr,
           level: newAlarm.level,
           ruleType: newAlarm.ruleType,
           message: newAlarm.message,
-          ruleStatus: 'ACTIVE'
+          ruleStatus: newAlarm.ruleStatus || 'ACTIVE'
         });
       }
     });
@@ -1195,7 +1203,7 @@
       sourceNote.textContent = `Evaluasi: ${sourceLabel}`;
     }
 
-    const activeCount = state.alarmLog.filter(a => a.ruleStatus === 'ACTIVE').length;
+    const activeCount = state.alarmLog.filter(a => a.ruleStatus === 'ACTIVE' || a.ruleStatus === 'ACTIVE_UNACK').length;
     const countText = DOM.alarmActiveCountText || document.getElementById('alarmActiveCountText');
     if (countText) {
       countText.textContent = `${activeCount} Alarm Aktif`;
@@ -1232,13 +1240,25 @@
         ? (tier === 'CRITICAL' ? 'alarm-row-active-critical' : 'alarm-row-active-major')
         : 'alarm-row-cleared';
       const ruleCode = String(alarm.ruleType || 'SYS_EVENT').toUpperCase();
-      const statusTextHtml = `<span class="alarm-status-text ${statusInfo.cssClass}">${statusInfo.text}</span>`;
+      const isUnack = (alarm.ruleStatus === 'ACTIVE_UNACK' || statusInfo.text === 'Active');
 
-      // Tombol konfirmasi (Acknowledge) untuk alarm aktif
-      const showAckBtn = isActive && alarm.id && alarm.id !== '';
-      const ackCell = showAckBtn
-        ? `<td class="col-aksi"><button class="btn-alarm-ack" data-alarm-id="${alarm.id}">Acknowledge</button></td>`
-        : `<td class="col-aksi">${statusTextHtml}</td>`;
+      // Tombol / dialog konfirmasi Acknowledge HANYA aktif untuk alarm resmi dari API Mastify
+      const canAcknowledge = isUnack && alarm.isServerAlarm && alarm.id;
+
+      const ackCell = canAcknowledge
+        ? `<td class="col-aksi">
+            <span class="alarm-status-text status-active btn-status-click" 
+                  data-alarm-id="${alarm.id}" 
+                  data-rule-code="${ruleCode}" 
+                  title="Klik untuk Acknowledge alarm resmi ke Mastify">
+              Active
+            </span>
+          </td>`
+        : `<td class="col-aksi">
+            <span class="alarm-status-text ${statusInfo.cssClass}">
+              ${statusInfo.text}
+            </span>
+          </td>`;
 
       rows.push(`
         <tr class="${rowHighlightClass}">
@@ -1252,13 +1272,17 @@
 
     tbody.innerHTML = rows.join('');
 
-    // Pasang event listener pada setiap tombol Acknowledge yang dirender
-    tbody.querySelectorAll('.btn-alarm-ack').forEach(function (btn) {
-      btn.addEventListener('click', async function () {
+    // Dialog konfirmasi sistem web saat tulisan Active diklik
+    tbody.querySelectorAll('.btn-status-click').forEach(function (el) {
+      el.addEventListener('click', async function () {
         const id = this.getAttribute('data-alarm-id');
-        this.disabled = true;
-        this.textContent = 'Proses...';
-        await acknowledgeAlarm(id);
+        const code = this.getAttribute('data-rule-code') || 'ALARM';
+        const confirmed = window.confirm(`Konfirmasi Acknowledge Alarm: ${code}?\n\nKirim konfirmasi penanganan alarm ke platform Mastify Cloud.`);
+        if (confirmed) {
+          this.textContent = 'Proses...';
+          this.style.pointerEvents = 'none';
+          await acknowledgeAlarm(id);
+        }
       });
     });
   }

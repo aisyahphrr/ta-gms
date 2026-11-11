@@ -1338,25 +1338,33 @@ body {
 }
 
 .btn-alarm-ack {
-  background: #eff6ff;
-  color: #1d4ed8;
-  border: 1px solid #bfdbfe;
-  padding: 3px 7px;
-  border-radius: 4px;
-  font-size: 0.65rem;
+  background: #ffffff;
+  color: #2563eb;
+  border: 1.5px solid #3b82f6;
+  padding: 3px 10px;
+  border-radius: 5px;
+  font-size: 0.7rem;
   font-weight: 700;
   cursor: pointer;
-  transition: all 0.2s ease;
+  transition: all 0.15s ease;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  box-shadow: 0 1px 3px rgba(37, 99, 235, 0.12);
 }
 
 .btn-alarm-ack:hover {
-  background: #1d4ed8;
+  background: #2563eb;
   color: #ffffff;
+  border-color: #1d4ed8;
+  transform: translateY(-1px);
+  box-shadow: 0 2px 5px rgba(37, 99, 235, 0.25);
 }
 
 .btn-alarm-ack:disabled {
   opacity: 0.5;
   cursor: not-allowed;
+  transform: none;
 }
 
 .btn-alarm-clear {
@@ -1456,12 +1464,23 @@ body {
   color: #dc2626;
 }
 
+.alarm-status-text.status-active.btn-status-click {
+  cursor: pointer;
+  user-select: none;
+  transition: opacity 0.2s ease, text-decoration 0.2s ease;
+}
+
+.alarm-status-text.status-active.btn-status-click:hover {
+  text-decoration: underline;
+  opacity: 0.8;
+}
+
 .alarm-status-text.status-cleared {
   color: #059669;
 }
 
 .alarm-status-text.status-acknowledged {
-  color: #d97706;
+  color: #2563eb;
 }
 
 .alarm-status-text.status-unacknowledged {
