@@ -431,11 +431,23 @@
       else loadStatus = 'OPTIMAL';
     }
 
-    // Hitung estimasi volume solar jika hanya fuel_level_mm yang dikirim (0.507 L/mm)
+    // Hitung estimasi volume solar & status level (Disesuaikan untuk skala wadah lab 200 mm / 20 cm)
     const fuelMmVal = safeNum(getLatestVal('fuel_level_mm'));
     let fuelVolVal = safeNum(getLatestVal('fuel_vol_l'));
     if ((fuelVolVal === null || fuelVolVal === undefined) && fuelMmVal !== null && fuelMmVal !== undefined) {
-      fuelVolVal = parseFloat((fuelMmVal * 0.507).toFixed(1));
+      // Estimasi volume wadah lab (kapasitas wadah uji ~3.5 Liter)
+      fuelVolVal = parseFloat(((fuelMmVal / 200) * 3.5).toFixed(2));
+    }
+
+    // Evaluasi status ketinggian solar untuk wadah lab 200 mm (20 cm):
+    // >= 80 mm (>= 8 cm): NORMAL
+    // 40 - 79 mm (4 - 7.9 cm): LOW
+    // < 40 mm (< 4 cm): CRITICAL
+    let fuelStatusVal = getLatestVal('fuel_status') || null;
+    if (!fuelStatusVal && fuelMmVal !== null && fuelMmVal !== undefined) {
+      if (fuelMmVal < 40.0) fuelStatusVal = 'CRITICAL';
+      else if (fuelMmVal < 80.0) fuelStatusVal = 'LOW';
+      else fuelStatusVal = 'NORMAL';
     }
 
     // Hitung estimasi konsumsi BBM kumulatif (Model SFC Genset: Section 3.I Buku Induk)
@@ -456,7 +468,7 @@
       temp_status: getLatestVal('temp_status') || null,
       fuel_level_mm: fuelMmVal !== null ? fuelMmVal : safeNum(getLatestVal('fuel_vol_l')),
       fuel_vol_l: fuelVolVal,
-      fuel_status: getLatestVal('fuel_status') || null,
+      fuel_status: fuelStatusVal,
       batt_volt_v: battVolt,
       battery_v: battVolt,
       run_hours: rawRunHours,
@@ -1029,24 +1041,25 @@
       }
     }
 
-    // 6. Level Tangki Solar (fuel_level_mm) - Batas: < 200mm Critical, < 400mm Major
+    // 6. Level Tangki Solar (fuel_level_mm) - Disesuaikan untuk Skala Wadah Lab 200 mm (20 cm)
+    // Batas Wadah Lab: < 40mm (< 4 cm / < 20%) Critical, < 80mm (< 8 cm / < 40%) Major
     const fuelMm = Number(t.fuel_level_mm);
     const isLevelCalibrated = (t.level_calibrated !== undefined) ? Boolean(t.level_calibrated) : true;
     if (!isNaN(fuelMm) && fuelMm > 0 && isLevelCalibrated) {
-      if (fuelMm < 200.0 || t.fuel_status === 'CRITICAL') {
+      if (fuelMm < 40.0 || t.fuel_status === 'CRITICAL') {
         alarms.push({
           timestamp: time,
           level: 'CRITICAL',
           ruleType: 'FUEL_LEVEL',
-          message: `Level solar tangki genset kritis (< 10% / < 200 mm: ${Math.round(fuelMm)} mm). Mesin berisiko kehabisan solar!`,
+          message: `Level solar wadah lab kritis (< 40 mm: ${Math.round(fuelMm)} mm). Mesin berisiko kehabisan solar!`,
           ruleStatus: 'ACTIVE'
         });
-      } else if (fuelMm < 400.0 || t.fuel_status === 'LOW' || t.fuel_status === 'MAJOR') {
+      } else if (fuelMm < 80.0 || t.fuel_status === 'LOW' || t.fuel_status === 'MAJOR') {
         alarms.push({
           timestamp: time,
           level: 'MAJOR',
           ruleType: 'FUEL_LEVEL',
-          message: `Level solar tangki genset di bawah batas aman (< 20% / < 400 mm: ${Math.round(fuelMm)} mm). Diperlukan pengisian solar.`,
+          message: `Level solar wadah lab di bawah batas aman (< 80 mm: ${Math.round(fuelMm)} mm). Diperlukan pengisian solar.`,
           ruleStatus: 'ACTIVE'
         });
       }
