@@ -143,9 +143,25 @@
   // Menangani penambahan token JWT dan auto-login otomatis saat sesi habis
   // ===========================================================================
   const apiClient = axios.create({
-    timeout: 5000,
+    timeout: 10000,
     headers: { 'Content-Type': 'application/json' }
   });
+
+  // Helper validasi apakah token JWT sudah kadaluarsa (exp timestamp)
+  function isJwtExpired(token) {
+    if (!token || typeof token !== 'string') return true;
+    try {
+      const cleanToken = token.replace('Bearer ', '').trim();
+      const parts = cleanToken.split('.');
+      if (parts.length !== 3) return true;
+      // Decode base64 payload JWT di browser
+      const payload = JSON.parse(atob(parts[1]));
+      // Anggap expired jika waktu sekarang sudah melewati exp (diberi buffer 60 detik)
+      return !payload.exp || (Date.now() >= (payload.exp - 60) * 1000);
+    } catch (_) {
+      return true;
+    }
+  }
 
   let _isRefreshing = false;
   let _refreshQueue = [];
@@ -234,12 +250,18 @@
     const queryUsername = urlParams.get('username');
     const queryPassword = urlParams.get('password');
 
-    if (queryToken) {
+    if (queryToken && !isJwtExpired(queryToken)) {
       state.config.jwtToken = queryToken;
       safeSetStorage('GMS_JWT_TOKEN', queryToken);
     } else {
       const cachedToken = safeGetStorage('GMS_JWT_TOKEN');
-      if (cachedToken) state.config.jwtToken = cachedToken;
+      if (cachedToken && !isJwtExpired(cachedToken)) {
+        state.config.jwtToken = cachedToken;
+      } else {
+        // Token di localStorage sudah kadaluarsa atau kosong, reset agar auto-login berjalan
+        state.config.jwtToken = '';
+        safeSetStorage('GMS_JWT_TOKEN', '');
+      }
     }
 
     if (queryHost) state.config.mastifyHost = queryHost;
