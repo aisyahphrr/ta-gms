@@ -31,44 +31,6 @@
     pollingIntervalMs: 3000
   };
 
-  // ===========================================================================
-  // 1b. PUSAT KONFIGURASI PARAMETER PENGUJIAN (TESTING BENCH / RUMAHAN)
-  // Asri cukup ubah angka di blok ini saja untuk keperluan testing meja/lab/rumah
-  // ===========================================================================
-  const TEST_THRESHOLDS = {
-    // 1. Suhu Mesin / Coolant (°C)
-    // Pengujian di rumah (suhu ruangan): misal warn > 28°C, crit > 32°C
-    // Genset industri riil: warn > 90°C, crit > 100°C
-    temp: {
-      warn: 90.0,
-      crit: 100.0
-    },
-
-    // 2. Ketinggian Solar Wadah Uji Lab (mm) - Ember Uji 200 mm (Kapasitas 8.5 Liter)
-    fuel: {
-      warnLo: 100.0,
-      critLo: 50.0
-    },
-
-    // 3. Tekanan Pelumas Oli (Bar)
-    // Genset industri riil: warn < 3.5 / > 4.5, crit < 2.5 / > 5.0
-    oil: {
-      critLo: 2.5,
-      warnLo: 3.5,
-      warnHi: 4.5,
-      critHi: 5.0
-    },
-
-    // 4. Tegangan Aki Starter (V)
-    batt: {
-      warnLo: 24.0,
-      critLo: 21.0
-    },
-
-    // 5. Mode Pengujian Rumahan (true = alarm tetap dievaluasi walau genset STOPPED)
-    ignoreEngineRunning: true
-  };
-
   // State runtime aplikasi
   const state = {
     currentMode: MODES.LIVE,
@@ -425,95 +387,32 @@
     const iL2 = safeNum(getLatestVal('i_l2', 'i_2', 'i_s'));
     const iL3 = safeNum(getLatestVal('i_l3', 'i_3', 'i_t'));
 
-    // Hitung NEMA Voltage Unbalance otomatis jika tidak disediakan oleh Mastify/gateway
-    let vUnbal = safeNum(getLatestVal('v_unbal_pct', 'voltage_unbalance', 'unbalance'));
-    if ((vUnbal === null || vUnbal === undefined) && vL1 !== null && vL2 !== null && vL3 !== null) {
-      const vAvg = (vL1 + vL2 + vL3) / 3;
-      if (vAvg > 0) {
-        const maxDevV = Math.max(Math.abs(vL1 - vAvg), Math.abs(vL2 - vAvg), Math.abs(vL3 - vAvg));
-        vUnbal = parseFloat(((maxDevV / vAvg) * 100).toFixed(1));
-      } else {
-        vUnbal = 0.0;
-      }
-    }
-
+    // Baca unbalance dan deviasi langsung dari data Mastify (Single Source of Truth)
+    const vUnbal = safeNum(getLatestVal('v_unbal_pct', 'voltage_unbalance', 'unbalance'));
     let voltBalanceText = getLatestVal('voltage_balance') || null;
-    if (!voltBalanceText && vUnbal !== null && vUnbal !== undefined) {
+    if (!voltBalanceText && vUnbal !== null) {
       if (vUnbal > 3.0) voltBalanceText = 'CRITICAL (FAULT)';
       else if (vUnbal > 2.0) voltBalanceText = 'WARNING (MAJOR)';
       else voltBalanceText = 'SEIMBANG (NORMAL)';
     }
 
-    // Hitung NEMA Current Unbalance otomatis jika tidak disediakan oleh Mastify/gateway
-    let iUnbal = safeNum(getLatestVal('i_unbal_pct'));
-    if ((iUnbal === null || iUnbal === undefined) && iL1 !== null && iL2 !== null && iL3 !== null) {
-      const iAvg = (iL1 + iL2 + iL3) / 3;
-      if (iAvg > 0) {
-        const maxDevI = Math.max(Math.abs(iL1 - iAvg), Math.abs(iL2 - iAvg), Math.abs(iL3 - iAvg));
-        iUnbal = parseFloat(((maxDevI / iAvg) * 100).toFixed(1));
-      } else {
-        iUnbal = 0.0;
-      }
-    }
+    const iUnbal = safeNum(getLatestVal('i_unbal_avg_15m', 'i_unbal_pct'));
+    const loadPct = safeNum(getLatestVal('load_pct', 'load'));
+    const loadStatus = getLatestVal('load_status') || (loadPct !== null ? 'NORMAL' : null);
 
-    // Hitung Load Pct otomatis jika pKw ada namun load_pct tidak dikirim (Kapasitas genset 44 kW)
-    let loadPct = safeNum(getLatestVal('load_pct', 'load'));
-    if ((loadPct === null || loadPct === undefined) && pKw !== null && pKw !== undefined) {
-      const ratedKw = 44.0;
-      loadPct = parseFloat(((pKw / ratedKw) * 100).toFixed(1));
-    }
-    // Ambil status sensor dari alarm aktif resmi Mastify jika tersedia di state runtime
-    // HMI Read-Only: Status kartu Panel 01 sepenuhnya mengikuti evaluasi server Mastify
-    function getActiveServerAlarmSeverity(ruleType) {
-      if (!state.alarmLog || !Array.isArray(state.alarmLog)) return null;
-      const found = state.alarmLog.find(a => 
-        a.ruleType === ruleType && 
-        (a.ruleStatus === 'ACTIVE' || a.ruleStatus === 'ACTIVE_UNACK' || a.ruleStatus === 'ACTIVE_ACK')
-      );
-      return found ? found.level : null;
-    }
-
-    // Evaluasi status beban (Prioritas: Alarm Server -> Telemetry -> Fallback)
-    const serverLoadAlarm = getActiveServerAlarmSeverity('LOAD_FAULT');
-    let loadStatus = serverLoadAlarm || getLatestVal('load_status') || null;
-    if (!loadStatus && loadPct !== null && loadPct !== undefined) {
-      if (loadPct > 100) loadStatus = 'OVERLOAD';
-      else if (loadPct < 30) loadStatus = 'UNDERLOAD';
-      else loadStatus = 'OPTIMAL';
-    }
-
-    // Hitung estimasi volume solar & status level (Prioritas: Rule Chain Mastify fuel_vol_l)
+    // Level solar dan volume solar murni dari field Mastify (Rule Chain)
     const fuelMmVal = safeNum(getLatestVal('fuel_level_mm'));
-    let fuelVolVal = safeNum(getLatestVal('fuel_vol_l'));
-    if ((fuelVolVal === null || fuelVolVal === undefined) && fuelMmVal !== null && fuelMmVal !== undefined) {
-      // Estimasi volume wadah ember uji fisik (200mm = 8.5 Liter -> 0.0425 L/mm)
-      fuelVolVal = parseFloat((fuelMmVal * 0.0425).toFixed(2));
-    }
-
-    // Evaluasi status ketinggian solar (Prioritas: Alarm Server Mastify -> Telemetry -> Normal)
-    const serverFuelAlarm = getActiveServerAlarmSeverity('FUEL_LEVEL');
-    let fuelStatusVal = serverFuelAlarm || getLatestVal('fuel_status') || 'NORMAL';
-
-    // Evaluasi status suhu mesin (Prioritas: Alarm Server Mastify -> Telemetry -> Normal)
-    const serverTempAlarm = getActiveServerAlarmSeverity('ENGINE_TEMP');
-    let tempStatusVal = serverTempAlarm || getLatestVal('temp_status') || 'NORMAL';
-
-    // Evaluasi status tekanan oli (Prioritas: Alarm Server Mastify -> Telemetry -> Normal)
-    const serverPressAlarm = getActiveServerAlarmSeverity('OIL_PRESSURE');
-    let pressStatusVal = serverPressAlarm || getLatestVal('press_status') || 'NORMAL';
-
-    // Hitung estimasi konsumsi BBM kumulatif (Model SFC Genset: Section 3.I Buku Induk)
-    let fuelEstVal = safeNum(getLatestVal('fuel_est_l', 'fuelEstimate'));
-    if ((fuelEstVal === null || fuelEstVal === undefined) && rawRunHours !== null && rawRunHours > 0) {
-      const activeKw = (pKw !== null && pKw > 0) ? pKw : 22.0;
-      fuelEstVal = parseFloat((rawRunHours * activeKw * 0.24).toFixed(1));
-    }
+    const fuelVolVal = safeNum(getLatestVal('fuel_vol_l'));
+    const fuelStatusVal = getLatestVal('fuel_status') || 'NORMAL';
+    const tempStatusVal = getLatestVal('temp_status') || 'NORMAL';
+    const pressStatusVal = getLatestVal('press_status') || 'NORMAL';
+    const fuelEstVal = safeNum(getLatestVal('fuel_est_l', 'fuelEstimate'));
 
     return {
       // A. Engine & Mekanikal
       engine_state: getLatestVal('engine_state', 'status') || null,
       eng_speed_rpm: safeNum(getLatestVal('eng_speed_rpm', 'rpm', 'speed')),
-      oil_press_bar: oilPressVal,
+      oil_press_bar: safeNum(getLatestVal('oil_press_bar', 'pressure')),
       press_status: pressStatusVal,
       coolant_temp_c: coolantTemp,
       engine_temp_c: coolantTemp,
@@ -568,8 +467,34 @@
   }
 
   // ===========================================================================
-  // 6. RENDER DATA KE PANEL MONITORING
+  // 6. SINKRONISASI REAKTIF ALARM MASTIFY & RENDER PANEL MONITORING
   // ===========================================================================
+
+  // Sinkronisasi status badge Panel 01 murni mengikuti alarm aktif Mastify (Pure Read-Only HMI)
+  function syncSensorStatusFromAlarms(data, alarms) {
+    if (!data) return;
+    const list = Array.isArray(alarms) ? alarms : (state.alarmLog || []);
+
+    function getSeverity(ruleType) {
+      const found = list.find(a =>
+        a.ruleType === ruleType &&
+        (a.ruleStatus === 'ACTIVE' || a.ruleStatus === 'ACTIVE_UNACK' || a.ruleStatus === 'ACTIVE_ACK')
+      );
+      return found ? normalizeSeverityTier(found.level) : null;
+    }
+
+    // 1. Suhu Mesin: Alarm ENGINE_TEMP aktif -> CRITICAL / MAJOR, jika tidak -> NORMAL
+    data.temp_status = getSeverity('ENGINE_TEMP') || 'NORMAL';
+
+    // 2. Tekanan Oli: Alarm OIL_PRESSURE aktif -> CRITICAL / MAJOR, jika tidak -> NORMAL
+    data.press_status = getSeverity('OIL_PRESSURE') || 'NORMAL';
+
+    // 3. Level Solar: Alarm FUEL_LEVEL aktif -> CRITICAL / MAJOR, jika tidak -> NORMAL
+    data.fuel_status = getSeverity('FUEL_LEVEL') || 'NORMAL';
+
+    // 4. Beban Genset: Alarm LOAD_FAULT aktif -> CRITICAL / MAJOR, jika tidak -> NORMAL
+    data.load_status = getSeverity('LOAD_FAULT') || (data.load_pct !== null && data.load_pct !== undefined ? 'NORMAL' : null);
+  }
 
   function renderRealtimePanel(data) {
     if (!data) return;
@@ -688,9 +613,9 @@
   // Render status pill dengan override NAMUR NE43 jika sensor fault
   function renderNamurSensorStatus(pillEl, thresholdStatus, namurStatus, val) {
     if (!pillEl) return;
-    const ns = String(namurStatus || '').toUpperCase();
+    const ns = String(namurStatus || '').toUpperCase().trim();
     if (ns === 'FAULT_LOW' || ns === 'FAULT_HIGH') {
-      pillEl.textContent = 'SENSOR ' + ns;
+      pillEl.textContent = 'SENSOR ' + ns.replace('_', ' ');
       pillEl.className = 'status-pill-small tier-sensor-fault';
     } else if (val === null || val === undefined) {
       updateStatusPill(pillEl, '--');
@@ -948,253 +873,35 @@
     return 'tier-normal';
   }
 
-  // evaluasi rule chain lokal — dipakai di offline mode & sebagai fallback jika Mastify API kosong
-  // Ambang batas alarm operasional genset 
-  function evaluateTelemetryAlarms(t, timeStr) {
-    if (!t) return [];
-    const alarms = [];
-    const time = timeStr || new Date().toLocaleTimeString('id-ID', { hour: '2-digit', minute: '2-digit', second: '2-digit' });
+  // Ambil daftar alarm dari DATA_LAB untuk mode offline/simulasi sidang.
+  // Alarm dibaca dari DATA_LAB.activeAlarms; skenario simulasi keypress menambahkan alarm sintetis
+  // sesuai injeksi yang dilakukan di getNextOfflineFrame().
+  function getOfflineAlarms(frame) {
+    const dataset = getDataLabDataset();
+    const baseAlarms = Array.isArray(dataset.activeAlarms) ? dataset.activeAlarms.map(a => Object.assign({}, a)) : [];
+    const timeStr = new Date().toLocaleTimeString('id-ID', { hour: '2-digit', minute: '2-digit', second: '2-digit' });
 
-    // Konversi nilai parameter telemetri
-    const temp = Number(t.engine_temp_c !== undefined ? t.engine_temp_c : t.coolant_temp_c);
-    const press = Number(t.oil_press_bar);
-    const isEngineRunning = (t.engine_state === 'RUNNING') || Boolean(TEST_THRESHOLDS.ignoreEngineRunning);
+    // Injeksi alarm sesuai skenario simulasi sidang aktif (hotkey keyboard)
+    const sim = state.activeSimulation;
+    const SIM_ALARMS = {
+      temp: { id: null, isServerAlarm: false, timestamp: timeStr, level: 'MAJOR', ruleType: 'ENGINE_TEMP', message: 'SIMULASI: Suhu pendingin engine mendekati batas peringatan (88.5°C > 90.0°C).', ruleStatus: 'ACTIVE' },
+      oil: { id: null, isServerAlarm: false, timestamp: timeStr, level: 'CRITICAL', ruleType: 'OIL_PRESSURE', message: 'SIMULASI: Tekanan pelumas oli drop kritis (1.45 bar < 2.5 bar).', ruleStatus: 'ACTIVE' },
+      voltage: { id: null, isServerAlarm: false, timestamp: timeStr, level: 'CRITICAL', ruleType: 'VOLTAGE_FAULT', message: 'SIMULASI: Deviasi tegangan 3-fasa NEMA kritis (4.3% > 3.0%). Risiko overheat belitan alternator.', ruleStatus: 'ACTIVE' },
+      freq: { id: null, isServerAlarm: false, timestamp: timeStr, level: 'MAJOR', ruleType: 'FREQ_FAULT', message: 'SIMULASI: Frekuensi alternator menyimpang dari nominal 50.0 Hz (48.2 Hz).', ruleStatus: 'ACTIVE' },
+      imbalance: { id: null, isServerAlarm: false, timestamp: timeStr, level: 'CRITICAL', ruleType: 'CURRENT_IMBALANCE', message: 'SIMULASI: Ketidakseimbangan arus 3-fasa rata-rata kritis (48.5% > 40.0%).', ruleStatus: 'ACTIVE' },
+      sensor_ai1: { id: null, isServerAlarm: false, timestamp: timeStr, level: 'MAJOR', ruleType: 'SENSOR_FAULT_AI1', message: 'SIMULASI: Loop 4-20mA sensor AI1 Pressure Transducer terputus (< 3.8mA). NAMUR NE43 FAULT_LOW.', ruleStatus: 'ACTIVE' }
+    };
 
-    // 1. Sensor Fault NAMUR NE43 Check (Prioritas Utama)
-    const isTempSensorFault = (t.temp_status === 'SENSOR_FAULT' || temp < -50 || t.ai2_st === 'FAULT_LOW' || t.ai2_st === 'FAULT_HIGH');
-    const isPressSensorFault = (t.press_status === 'SENSOR_FAULT' || press < -50 || t.ai1_st === 'FAULT_LOW' || t.ai1_st === 'FAULT_HIGH');
-    const isFuelSensorFault = (t.fuel_status === 'SENSOR_FAULT' || t.ai3_st === 'FAULT_LOW' || t.ai3_st === 'FAULT_HIGH');
-
-    if (t.sensor_fault === true || isTempSensorFault || isPressSensorFault || isFuelSensorFault) {
-      let sensorName = 'Transmisi 4-20mA';
-      if (isTempSensorFault) sensorName = 'AI2 PT100 Coolant RTD';
-      else if (isPressSensorFault) sensorName = 'AI1 Transducer Tekanan Pelumas';
-      else if (isFuelSensorFault) sensorName = 'AI3 Hydrostatic Level Solar';
-
-      alarms.push({
-        timestamp: time,
-        level: 'MAJOR',
-        ruleType: 'SENSOR_FAULT_AI1',
-        message: `Arus loop transmisi 4-20mA sensor (${sensorName}) di luar rentang standar NAMUR NE43 (< 3.8mA / > 20.5mA). Indikasi kabel putus atau short circuit.`,
-        ruleStatus: 'ACTIVE'
-      });
+    if (sim && sim !== 'normal' && SIM_ALARMS[sim]) {
+      // Skenario simulasi aktif: tampilkan hanya alarm skenario yang dipilih
+      return [SIM_ALARMS[sim]];
     }
 
-    // 2. Suhu Coolant (engine_temp_c) - Dievaluasi jika sensor normal (Berdasarkan TEST_THRESHOLDS)
-    if (!isNaN(temp) && !isTempSensorFault) {
-      if (temp > TEST_THRESHOLDS.temp.crit || t.temp_status === 'CRITICAL') {
-        alarms.push({
-          timestamp: time,
-          level: 'CRITICAL',
-          ruleType: 'ENGINE_TEMP',
-          message: `Suhu pendingin engine sangat tinggi (${temp.toFixed(1)}°C > ${TEST_THRESHOLDS.temp.crit.toFixed(1)}°C). Risiko overheat fatal & engine seizure!`,
-          ruleStatus: 'ACTIVE'
-        });
-      } else if (temp > TEST_THRESHOLDS.temp.warn || t.temp_status === 'MAJOR') {
-        alarms.push({
-          timestamp: time,
-          level: 'MAJOR',
-          ruleType: 'ENGINE_TEMP',
-          message: `Suhu pendingin engine melebihi ambang batas aman (${temp.toFixed(1)}°C > ${TEST_THRESHOLDS.temp.warn.toFixed(1)}°C). Sirkulasi radiator perlu dicek.`,
-          ruleStatus: 'ACTIVE'
-        });
-      }
-    }
-
-    // 3. Tekanan Pelumas / Oli (oil_press_bar) - Dievaluasi saat RUNNING / Mode Testing
-    if (!isNaN(press) && isEngineRunning && !isPressSensorFault) {
-      if (press < TEST_THRESHOLDS.oil.critLo || press > TEST_THRESHOLDS.oil.critHi || t.press_status === 'CRITICAL') {
-        alarms.push({
-          timestamp: time,
-          level: 'CRITICAL',
-          ruleType: 'OIL_PRESSURE',
-          message: `Tekanan oli pelumas di luar batas kritis (< ${TEST_THRESHOLDS.oil.critLo} bar atau > ${TEST_THRESHOLDS.oil.critHi} bar: ${press.toFixed(2)} bar). Bahaya fatal pelumasan!`,
-          ruleStatus: 'ACTIVE'
-        });
-      } else if (press < TEST_THRESHOLDS.oil.warnLo || press > TEST_THRESHOLDS.oil.warnHi || t.press_status === 'MAJOR') {
-        alarms.push({
-          timestamp: time,
-          level: 'MAJOR',
-          ruleType: 'OIL_PRESSURE',
-          message: `Tekanan oli pelumas menyimpang dari batas aman ${TEST_THRESHOLDS.oil.warnLo}-${TEST_THRESHOLDS.oil.warnHi} bar (${press.toFixed(2)} bar). Periksa filter oli dan pompa.`,
-          ruleStatus: 'ACTIVE'
-        });
-      }
-    }
-
-    // 4. Tegangan Fasa & Ketidakseimbangan NEMA (Batas: < 190 / > 235V Critical, < 200 / > 230V Major)
-    const unbal = Number(t.v_unbal_pct !== undefined ? t.v_unbal_pct : 0);
-    const v1 = Number(t.v_l1 !== undefined ? t.v_l1 : (t.v_l1_n || t.v_11 || 0));
-    const v2 = Number(t.v_l2 !== undefined ? t.v_l2 : (t.v_l2_n || t.v_12 || 0));
-    const v3 = Number(t.v_l3 !== undefined ? t.v_l3 : (t.v_l3_n || t.v_13 || 0));
-
-    if (isEngineRunning) {
-      const isVoltCrit = (v1 > 0 && (v1 < 190.0 || v1 > 235.0)) ||
-        (v2 > 0 && (v2 < 190.0 || v2 > 235.0)) ||
-        (v3 > 0 && (v3 < 190.0 || v3 > 235.0));
-      const isVoltMajor = (v1 > 0 && (v1 < 200.0 || v1 > 230.0)) ||
-        (v2 > 0 && (v2 < 200.0 || v2 > 230.0)) ||
-        (v3 > 0 && (v3 < 200.0 || v3 > 230.0));
-
-      if (isVoltCrit) {
-        alarms.push({
-          timestamp: time,
-          level: 'CRITICAL',
-          ruleType: 'VOLTAGE_FAULT',
-          message: `Tegangan fasa di luar batas kritis (< 190V atau > 235V: L1=${v1.toFixed(1)}V, L2=${v2.toFixed(1)}V, L3=${v3.toFixed(1)}V). Potensi anomali AVR/phase loss!`,
-          ruleStatus: 'ACTIVE'
-        });
-      } else if (isVoltMajor) {
-        alarms.push({
-          timestamp: time,
-          level: 'MAJOR',
-          ruleType: 'VOLTAGE_FAULT',
-          message: `Tegangan fasa menyimpang dari nominal 220V (< 200V atau > 230V: L1=${v1.toFixed(1)}V, L2=${v2.toFixed(1)}V, L3=${v3.toFixed(1)}V).`,
-          ruleStatus: 'ACTIVE'
-        });
-      } else if (unbal > 3.0) {
-        alarms.push({
-          timestamp: time,
-          level: 'CRITICAL',
-          ruleType: 'VOLTAGE_FAULT',
-          message: `Deviasi tegangan 3-fasa NEMA kritis (${unbal.toFixed(1)}% > 3.0%). Risiko overheat belitan alternator!`,
-          ruleStatus: 'ACTIVE'
-        });
-      } else if (unbal > 2.0) {
-        alarms.push({
-          timestamp: time,
-          level: 'MAJOR',
-          ruleType: 'VOLTAGE_FAULT',
-          message: `Ketidakseimbangan tegangan NEMA tinggi (${unbal.toFixed(1)}% > 2.0%). Beban fasa tidak merata.`,
-          ruleStatus: 'ACTIVE'
-        });
-      }
-    }
-
-    // 5. Frekuensi Alternator (freq_hz) - Batas: < 48 / > 52 Hz Critical, < 49 / > 51 Hz Major
-    const freq = Number(t.freq_hz);
-    if (!isNaN(freq) && isEngineRunning && freq > 0) {
-      if (freq < 48.0 || freq > 52.0) {
-        alarms.push({
-          timestamp: time,
-          level: 'CRITICAL',
-          ruleType: 'FREQ_FAULT',
-          message: `Frekuensi alternator kritis di luar batas (< 48.0 atau > 52.0 Hz: ${freq.toFixed(2)} Hz). Risiko kerusakan beban!`,
-          ruleStatus: 'ACTIVE'
-        });
-      } else if (freq < 49.0 || freq > 51.0) {
-        alarms.push({
-          timestamp: time,
-          level: 'MAJOR',
-          ruleType: 'FREQ_FAULT',
-          message: `Frekuensi alternator menyimpang dari nominal 50.0 Hz (${freq.toFixed(2)} Hz). Governor mesin perlu dicek.`,
-          ruleStatus: 'ACTIVE'
-        });
-      }
-    }
-
-    // 6. Level Tangki Solar (fuel_level_mm) - Disesuaikan dengan TEST_THRESHOLDS (Wadah Lab ~230 mm)
-    const fuelMm = Number(t.fuel_level_mm);
-    const isLevelCalibrated = (t.level_calibrated !== undefined) ? Boolean(t.level_calibrated) : true;
-    if (!isNaN(fuelMm) && fuelMm > 0 && isLevelCalibrated) {
-      if (fuelMm < TEST_THRESHOLDS.fuel.critLo || t.fuel_status === 'CRITICAL') {
-        alarms.push({
-          timestamp: time,
-          level: 'CRITICAL',
-          ruleType: 'FUEL_LEVEL',
-          message: `Level solar wadah lab kritis (< ${TEST_THRESHOLDS.fuel.critLo} mm: ${Math.round(fuelMm)} mm). Mesin berisiko kehabisan solar!`,
-          ruleStatus: 'ACTIVE'
-        });
-      } else if (fuelMm <= TEST_THRESHOLDS.fuel.warnLo || t.fuel_status === 'LOW' || t.fuel_status === 'MAJOR') {
-        alarms.push({
-          timestamp: time,
-          level: 'MAJOR',
-          ruleType: 'FUEL_LEVEL',
-          message: `Level solar wadah lab di bawah batas aman (<= ${TEST_THRESHOLDS.fuel.warnLo} mm: ${Math.round(fuelMm)} mm). Diperlukan pengisian solar.`,
-          ruleStatus: 'ACTIVE'
-        });
-      }
-    }
-
-    // 7. Pembebanan Genset (load_pct) - Batas: > 80% Critical, > 70% Major
-    const load = Number(t.load_pct);
-    if (!isNaN(load) && isEngineRunning) {
-      if (load > 80.0 || t.load_status === 'CRITICAL') {
-        alarms.push({
-          timestamp: time,
-          level: 'CRITICAL',
-          ruleType: 'LOAD_FAULT',
-          message: `Beban genset melebihi batas kritis (> 80% kapasitas: ${load.toFixed(1)}%). Risiko tripping kontaktor!`,
-          ruleStatus: 'ACTIVE'
-        });
-      } else if (load > 70.0 || t.load_status === 'MAJOR') {
-        alarms.push({
-          timestamp: time,
-          level: 'MAJOR',
-          ruleType: 'LOAD_FAULT',
-          message: `Beban genset tinggi melebihi 70% kapasitas (${load.toFixed(1)}%). Perhatikan beban puncak.`,
-          ruleStatus: 'ACTIVE'
-        });
-      }
-    }
-
-    // 8. Ketidakseimbangan Arus 3-Fasa (Current Imbalance 15-Menit & Instant) - Batas: > 40% Critical, > 20% Major
-    const iUnbal = Number(t.i_unbal_avg_15m !== undefined ? t.i_unbal_avg_15m : (t.i_unbal_pct || 0));
-    if (isEngineRunning && !isNaN(iUnbal) && iUnbal > 0) {
-      if (iUnbal > 40.0) {
-        alarms.push({
-          timestamp: time,
-          level: 'CRITICAL',
-          ruleType: 'CURRENT_IMBALANCE',
-          message: `Ketidakseimbangan arus 3-fasa rata-rata kritis (${iUnbal.toFixed(1)}% > 40.0%). Beban fasa sangat tidak seimbang!`,
-          ruleStatus: 'ACTIVE'
-        });
-      } else if (iUnbal > 20.0) {
-        alarms.push({
-          timestamp: time,
-          level: 'MAJOR',
-          ruleType: 'CURRENT_IMBALANCE',
-          message: `Ketidakseimbangan arus 3-fasa rata-rata tinggi (${iUnbal.toFixed(1)}% > 20.0%). Diperlukan redistribusi beban fasa.`,
-          ruleStatus: 'ACTIVE'
-        });
-      }
-    }
-
-    // 9. Tegangan Baterai / Aki (battery_v) - Disesuaikan dengan TEST_THRESHOLDS
-    const battV = Number(t.battery_v !== undefined ? t.battery_v : t.batt_volt_v);
-    if (!isNaN(battV) && battV > 0) {
-      if (battV < TEST_THRESHOLDS.batt.critLo) {
-        alarms.push({
-          timestamp: time,
-          level: 'CRITICAL',
-          ruleType: 'BATTERY_FAULT',
-          message: `Tegangan baterai starter genset sangat kritis (${battV.toFixed(1)} V < ${TEST_THRESHOLDS.batt.critLo.toFixed(1)} V). Genset berisiko gagal starter!`,
-          ruleStatus: 'ACTIVE'
-        });
-      } else if (battV < TEST_THRESHOLDS.batt.warnLo) {
-        alarms.push({
-          timestamp: time,
-          level: 'MAJOR',
-          ruleType: 'BATTERY_FAULT',
-          message: `Tegangan baterai starter genset lemah (${battV.toFixed(1)} V < ${TEST_THRESHOLDS.batt.warnLo.toFixed(1)} V). Cek sistem alternator/charger aki.`,
-          ruleStatus: 'ACTIVE'
-        });
-      }
-    }
-
-    // 10. Engine State FAULT
-    if (t.engine_state === 'FAULT') {
-      alarms.push({
-        timestamp: time,
-        level: 'CRITICAL',
-        ruleType: 'ENGINE_FAULT',
-        message: `Trip proteksi aktif! Mesin genset berhenti darurat akibat kondisi anomali terdeteksi.`,
-        ruleStatus: 'ACTIVE'
-      });
-    }
-
-    return alarms.map(a => Object.assign({ id: null, isServerAlarm: false }, a));
+    // Normal offline: gunakan alarm dari DATA_LAB.activeAlarms
+    return baseAlarms.map(a => Object.assign({ isServerAlarm: false }, a));
   }
+
+
 
   // render tabel alarm aktif & riwayat perubahan status (5 kolom teknis)
   function renderAlarmSystem(currentActiveAlarms, sourceLabel) {
@@ -1739,59 +1446,53 @@
     updateLastSyncTimestamp();
 
     if (USE_OFFLINE_DATA || state.currentMode === MODES.OFFLINE) {
-      // MODE: OFFLINE MODE / LOCAL TESTING (dataLab.js)
+      // MODE OFFLINE: gunakan DATA_LAB dari dataLab.js (simulasi sidang / demo)
       const frame = getNextOfflineFrame();
+      const offlineAlarms = getOfflineAlarms(frame);
+      syncSensorStatusFromAlarms(frame, offlineAlarms);
+
       renderRealtimePanel(frame);
       pushTimeseriesPoint(frame);
       renderMaintenancePanel(frame);
-
-      const timeStr = new Date().toLocaleTimeString('id-ID', { hour: '2-digit', minute: '2-digit', second: '2-digit' });
-      const evaluatedAlarms = evaluateTelemetryAlarms(frame, timeStr);
-      renderAlarmSystem(evaluatedAlarms, 'Data Lab Lokal (Simulasi Offline)');
+      renderAlarmSystem(offlineAlarms, 'Offline Demo (DATA_LAB — dataLab.js)');
       return;
     }
 
-    // MODE 1: LIVE REST API
+    // MODE LIVE: sumber tunggal — REST API Mastify (Single Source of Truth)
     try {
-      const data = await fetchMastifyTelemetry();
+      // Polling telemetri dan alarm dari Mastify secara paralel
+      const [data, liveAlarms] = await Promise.all([
+        fetchMastifyTelemetry(),
+        fetchMastifyAlarms()
+      ]);
       if (!data) throw new Error('Data telemetri kosong');
 
       if (DOM.statusDot) DOM.statusDot.className = 'rocker-led online';
       if (DOM.dataSourceText) DOM.dataSourceText.textContent = 'LIVE REST API (Mastify)';
 
+      // 1. Simpan & Render Alarm Resmi Mastify ke Panel 03
+      if (liveAlarms !== null) {
+        state.currentAlarms = liveAlarms;
+        renderAlarmSystem(liveAlarms, 'Mastify Cloud Alarm API');
+      }
+
+      // 2. Sinkronkan status badge Panel 01 murni berdasarkan alarm aktif Mastify
+      syncSensorStatusFromAlarms(data, liveAlarms !== null ? liveAlarms : state.currentAlarms);
+
+      // 3. Render Panel Telemetri, Timeseries, & Maintenance
       renderRealtimePanel(data);
       pushTimeseriesPoint(data);
       renderMaintenancePanel(data);
 
-      // dual source: coba alarm langsung dari Mastify API, fallback ke evaluasi rule lokal
-      const liveAlarms = await fetchMastifyAlarms();
-      if (liveAlarms !== null && liveAlarms.length > 0) {
-        renderAlarmSystem(liveAlarms, 'Mastify Live Alarm API');
-      } else {
-        // 2. Evaluasi parameter telemetri live dari data Mastify
-        const timeStr = new Date().toLocaleTimeString('id-ID', { hour: '2-digit', minute: '2-digit', second: '2-digit' });
-        const evaluatedAlarms = evaluateTelemetryAlarms(data, timeStr);
-        renderAlarmSystem(evaluatedAlarms, 'Mastify Live Telemetry Rule Chain');
-      }
-
     } catch (err) {
       console.warn('[GMS Polling] Gagal menghubungi Mastify API:', err.message);
 
-      // Auto-fallback ke dataLab.js jika API terputus agar dashboard tidak blank
-      const fallbackFrame = getNextOfflineFrame();
-      renderRealtimePanel(fallbackFrame);
-      pushTimeseriesPoint(fallbackFrame);
-      renderMaintenancePanel(fallbackFrame);
-
-      const timeStr = new Date().toLocaleTimeString('id-ID', { hour: '2-digit', minute: '2-digit', second: '2-digit' });
-      const evaluatedAlarms = evaluateTelemetryAlarms(fallbackFrame, timeStr);
-      renderAlarmSystem(evaluatedAlarms, 'Simulasi Lab (dataLab.js) — Terputus');
-
       if (DOM.statusDot) DOM.statusDot.className = 'rocker-led error';
-      if (DOM.dataSourceText) DOM.dataSourceText.textContent = `LIVE API: Terputus (${err.message}) — Fallback Data Lab`;
+      if (DOM.dataSourceText) DOM.dataSourceText.textContent = `LIVE API: Terputus (${err.message})`;
       if (DOM.lastSyncLabel) {
-        DOM.lastSyncLabel.textContent = `Sinkron: Fallback Data Lab (${new Date().toLocaleTimeString('id-ID')} WIB)`;
+        DOM.lastSyncLabel.textContent = `Sinkron: Terputus (${new Date().toLocaleTimeString('id-ID')} WIB)`;
       }
+      // Pertahankan data terakhir di layar; tidak render frame fallback offline di mode Live
     }
   }
 
@@ -1982,8 +1683,8 @@
       renderRealtimePanel(initialFrame);
       renderMaintenancePanel(initialFrame);
 
-      const initialAlarms = evaluateTelemetryAlarms(initialFrame);
-      renderAlarmSystem(initialAlarms, 'Inisialisasi Sistem');
+      // Inisialisasi alarm panel: kosongkan log lalu mulai polling
+      renderAlarmSystem([], 'Menunggu Data Alarm Mastify...');
 
       executeTelemetryCycle();
       state.pollTimer = setInterval(executeTelemetryCycle, state.config.pollingIntervalMs);
