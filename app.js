@@ -328,7 +328,7 @@
       'fuel_level_mm', 'fuel_vol_l', 'fuel_status',
       'run_hours', 'hourMeter', 'runHours',
       'maint_due_h', 'maintenance_status', 'maintenanceStatus', 'maint_status', 'maintStatus', 'maintenanceDueHours', 'maintDue',
-      'fuel_est_l', 'fuelEstimate',
+      'fuel_est_l', 'sim_fuel_est_l', 'fuelEstimate',
       'alarm_level', 'alarm_msg'
     ].join(',');
 
@@ -410,7 +410,16 @@
     const iL3 = safeNum(getLatestVal('i_l3', 'i_3', 'i_t'));
 
     // Baca unbalance dan deviasi langsung dari data Mastify (Single Source of Truth)
-    const vUnbal = safeNum(getLatestVal('v_unbal_pct', 'voltage_unbalance', 'unbalance'));
+    // Ketidakseimbangan tegangan NEMA (Prioritas: Mastify -> Hitung Langsung dari Tegangan 3-Fasa)
+    let vUnbal = safeNum(getLatestVal('v_unbal_pct', 'voltage_unbalance', 'unbalance'));
+    if (vUnbal === null && vL1 !== null && vL2 !== null && vL3 !== null) {
+      const vAvg = (vL1 + vL2 + vL3) / 3.0;
+      if (vAvg > 0) {
+        const maxVDiff = Math.max(Math.abs(vL1 - vAvg), Math.abs(vL2 - vAvg), Math.abs(vL3 - vAvg));
+        vUnbal = parseFloat(((maxVDiff / vAvg) * 100).toFixed(1));
+      }
+    }
+
     let voltBalanceText = getLatestVal('voltage_balance') || null;
     if (!voltBalanceText && vUnbal !== null) {
       if (vUnbal > 3.0) voltBalanceText = 'CRITICAL (FAULT)';
@@ -418,7 +427,16 @@
       else voltBalanceText = 'SEIMBANG (NORMAL)';
     }
 
-    const iUnbal = safeNum(getLatestVal('i_unbal_avg_15m', 'i_unbal_pct'));
+    // Ketidakseimbangan arus NEMA (Prioritas: Mastify -> Hitung Langsung dari Arus 3-Fasa)
+    let iUnbal = safeNum(getLatestVal('i_unbal_avg_15m', 'i_unbal_pct'));
+    if (iUnbal === null && iL1 !== null && iL2 !== null && iL3 !== null) {
+      const iAvg = (iL1 + iL2 + iL3) / 3.0;
+      if (iAvg > 0) {
+        const maxIDiff = Math.max(Math.abs(iL1 - iAvg), Math.abs(iL2 - iAvg), Math.abs(iL3 - iAvg));
+        iUnbal = parseFloat(((maxIDiff / iAvg) * 100).toFixed(1));
+      }
+    }
+
     const loadPct = safeNum(getLatestVal('load_pct', 'load'));
     const loadStatus = getLatestVal('load_status') || (loadPct !== null ? 'NORMAL' : null);
 
@@ -428,7 +446,13 @@
     const fuelStatusVal = getLatestVal('fuel_status') || 'NORMAL';
     const tempStatusVal = getLatestVal('temp_status') || 'NORMAL';
     const pressStatusVal = getLatestVal('press_status') || 'NORMAL';
-    const fuelEstVal = safeNum(getLatestVal('fuel_est_l', 'fuelEstimate'));
+    
+    // Estimasi konsumsi BBM kumulatif (Prioritas: fuel_est_l -> sim_fuel_est_l -> Hitung SFC)
+    let fuelEstVal = safeNum(getLatestVal('fuel_est_l', 'sim_fuel_est_l', 'fuelEstimate'));
+    if (fuelEstVal === null && rawRunHours !== null && rawRunHours > 0) {
+      const activeKw = (pKw !== null && pKw > 0) ? pKw : 22.0;
+      fuelEstVal = parseFloat((rawRunHours * activeKw * 0.24).toFixed(1));
+    }
 
     return {
       // A. Engine & Mekanikal
