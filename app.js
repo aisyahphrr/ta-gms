@@ -446,7 +446,7 @@
     const fuelStatusVal = getLatestVal('fuel_status') || 'NORMAL';
     const tempStatusVal = getLatestVal('temp_status') || 'NORMAL';
     const pressStatusVal = getLatestVal('press_status') || 'NORMAL';
-    
+
     // Estimasi konsumsi BBM kumulatif (Prioritas: fuel_est_l -> sim_fuel_est_l -> Hitung SFC)
     let fuelEstVal = safeNum(getLatestVal('fuel_est_l', 'sim_fuel_est_l', 'fuelEstimate'));
     if (fuelEstVal === null && rawRunHours !== null && rawRunHours > 0) {
@@ -661,7 +661,7 @@
     if (!pillEl) return;
     const ns = String(namurStatus || '').toUpperCase().trim();
     if (ns === 'FAULT_LOW' || ns === 'FAULT_HIGH') {
-      pillEl.textContent = 'SENSOR ' + ns.replace('_', ' ');
+      pillEl.textContent = ns.replace('_', ' ');
       pillEl.className = 'status-pill-small tier-sensor-fault';
     } else if (val === null || val === undefined) {
       updateStatusPill(pillEl, '--');
