@@ -31,6 +31,45 @@
     pollingIntervalMs: 3000
   };
 
+  // ===========================================================================
+  // 1b. PUSAT KONFIGURASI PARAMETER PENGUJIAN (TESTING BENCH / RUMAHAN)
+  // Asri cukup ubah angka di blok ini saja untuk keperluan testing meja/lab/rumah
+  // ===========================================================================
+  const TEST_THRESHOLDS = {
+    // 1. Suhu Mesin / Coolant (°C)
+    // Pengujian di rumah (suhu ruangan): misal warn > 28°C, crit > 32°C
+    // Genset industri riil: warn > 90°C, crit > 100°C
+    temp: {
+      warn: 90.0,
+      crit: 100.0
+    },
+
+    // 2. Ketinggian Solar Wadah Uji Lab (mm) - Ember Uji 200 mm (Kapasitas 8.5 Liter)
+    fuel: {
+      warnLo: 100.0,
+      critLo: 50.0
+    },
+
+    // 3. Tekanan Pelumas Oli (Bar)
+    // Genset industri riil: warn < 3.5 / > 4.5, crit < 2.5 / > 5.0
+    oil: {
+      critLo: 2.5,
+      warnLo: 3.5,
+      warnHi: 4.5,
+      critHi: 5.0
+    },
+
+    // 4. Tegangan Aki Starter (V)
+    batt: {
+      warnLo: 24.0,
+      critLo: 21.0
+    },
+
+    // 5. Mode Pengujian Rumahan (true = alarm tetap dievaluasi walau genset STOPPED)
+    ignoreEngineRunning: true
+  };
+  if (typeof window !== 'undefined') window.TEST_THRESHOLDS = TEST_THRESHOLDS;
+
   // State runtime aplikasi
   const state = {
     currentMode: MODES.LIVE,
@@ -431,23 +470,37 @@
       else loadStatus = 'OPTIMAL';
     }
 
-    // Hitung estimasi volume solar & status level (Disesuaikan untuk skala wadah lab 200 mm / 20 cm)
+    // Hitung estimasi volume solar & status level (Disesuaikan untuk skala wadah lab uji ~230 mm / 23 cm)
     const fuelMmVal = safeNum(getLatestVal('fuel_level_mm'));
     let fuelVolVal = safeNum(getLatestVal('fuel_vol_l'));
     if ((fuelVolVal === null || fuelVolVal === undefined) && fuelMmVal !== null && fuelMmVal !== undefined) {
-      // Estimasi volume wadah lab (kapasitas wadah uji ~3.5 Liter)
-      fuelVolVal = parseFloat(((fuelMmVal / 200) * 3.5).toFixed(2));
+      // Estimasi volume wadah ember uji fisik (200mm = 8.5 Liter -> 0.0425 L/mm)
+      fuelVolVal = parseFloat((fuelMmVal * 0.0425).toFixed(2));
     }
 
-    // Evaluasi status ketinggian solar untuk wadah lab 200 mm (20 cm):
-    // >= 80 mm (>= 8 cm): NORMAL
-    // 40 - 79 mm (4 - 7.9 cm): LOW
-    // < 40 mm (< 4 cm): CRITICAL
+    // Evaluasi status ketinggian solar (Prioritas: Mastify API -> Fallback TEST_THRESHOLDS)
     let fuelStatusVal = getLatestVal('fuel_status') || null;
     if (!fuelStatusVal && fuelMmVal !== null && fuelMmVal !== undefined) {
-      if (fuelMmVal < 40.0) fuelStatusVal = 'CRITICAL';
-      else if (fuelMmVal < 80.0) fuelStatusVal = 'LOW';
+      if (fuelMmVal < TEST_THRESHOLDS.fuel.critLo) fuelStatusVal = 'CRITICAL';
+      else if (fuelMmVal <= TEST_THRESHOLDS.fuel.warnLo) fuelStatusVal = 'LOW';
       else fuelStatusVal = 'NORMAL';
+    }
+
+    // Evaluasi status suhu mesin (Prioritas: Mastify API -> Fallback TEST_THRESHOLDS)
+    let tempStatusVal = getLatestVal('temp_status') || null;
+    if (!tempStatusVal && coolantTemp !== null && coolantTemp !== undefined) {
+      if (coolantTemp > TEST_THRESHOLDS.temp.crit) tempStatusVal = 'CRITICAL';
+      else if (coolantTemp > TEST_THRESHOLDS.temp.warn) tempStatusVal = 'MAJOR';
+      else tempStatusVal = 'NORMAL';
+    }
+
+    // Evaluasi status tekanan oli (Prioritas: Mastify API -> Fallback TEST_THRESHOLDS)
+    const oilPressVal = safeNum(getLatestVal('oil_press_bar', 'pressure'));
+    let pressStatusVal = getLatestVal('press_status') || null;
+    if (!pressStatusVal && oilPressVal !== null && oilPressVal !== undefined) {
+      if (oilPressVal < TEST_THRESHOLDS.oil.critLo || oilPressVal > TEST_THRESHOLDS.oil.critHi) pressStatusVal = 'CRITICAL';
+      else if (oilPressVal < TEST_THRESHOLDS.oil.warnLo || oilPressVal > TEST_THRESHOLDS.oil.warnHi) pressStatusVal = 'MAJOR';
+      else pressStatusVal = 'NORMAL';
     }
 
     // Hitung estimasi konsumsi BBM kumulatif (Model SFC Genset: Section 3.I Buku Induk)
@@ -461,11 +514,11 @@
       // A. Engine & Mekanikal
       engine_state: getLatestVal('engine_state', 'status') || null,
       eng_speed_rpm: safeNum(getLatestVal('eng_speed_rpm', 'rpm', 'speed')),
-      oil_press_bar: safeNum(getLatestVal('oil_press_bar', 'pressure')),
-      press_status: getLatestVal('press_status') || null,
+      oil_press_bar: oilPressVal,
+      press_status: pressStatusVal,
       coolant_temp_c: coolantTemp,
       engine_temp_c: coolantTemp,
-      temp_status: getLatestVal('temp_status') || null,
+      temp_status: tempStatusVal,
       fuel_level_mm: fuelMmVal !== null ? fuelMmVal : safeNum(getLatestVal('fuel_vol_l')),
       fuel_vol_l: fuelVolVal,
       fuel_status: fuelStatusVal,
@@ -906,7 +959,7 @@
     // Konversi nilai parameter telemetri
     const temp = Number(t.engine_temp_c !== undefined ? t.engine_temp_c : t.coolant_temp_c);
     const press = Number(t.oil_press_bar);
-    const isEngineRunning = (t.engine_state === 'RUNNING');
+    const isEngineRunning = (t.engine_state === 'RUNNING') || Boolean(TEST_THRESHOLDS.ignoreEngineRunning);
 
     // 1. Sensor Fault NAMUR NE43 Check (Prioritas Utama)
     const isTempSensorFault = (t.temp_status === 'SENSOR_FAULT' || temp < -50 || t.ai2_st === 'FAULT_LOW' || t.ai2_st === 'FAULT_HIGH');
@@ -928,43 +981,43 @@
       });
     }
 
-    // 2. Suhu Coolant (engine_temp_c) - Dievaluasi jika sensor normal (Batas: > 90°C Major, > 100°C Critical)
+    // 2. Suhu Coolant (engine_temp_c) - Dievaluasi jika sensor normal (Berdasarkan TEST_THRESHOLDS)
     if (!isNaN(temp) && !isTempSensorFault) {
-      if (temp > 100.0 || t.temp_status === 'CRITICAL') {
+      if (temp > TEST_THRESHOLDS.temp.crit || t.temp_status === 'CRITICAL') {
         alarms.push({
           timestamp: time,
           level: 'CRITICAL',
           ruleType: 'ENGINE_TEMP',
-          message: `Suhu pendingin engine sangat tinggi (${temp.toFixed(1)}°C > 100.0°C). Risiko overheat fatal & engine seizure!`,
+          message: `Suhu pendingin engine sangat tinggi (${temp.toFixed(1)}°C > ${TEST_THRESHOLDS.temp.crit.toFixed(1)}°C). Risiko overheat fatal & engine seizure!`,
           ruleStatus: 'ACTIVE'
         });
-      } else if (temp > 90.0 || t.temp_status === 'MAJOR') {
+      } else if (temp > TEST_THRESHOLDS.temp.warn || t.temp_status === 'MAJOR') {
         alarms.push({
           timestamp: time,
           level: 'MAJOR',
           ruleType: 'ENGINE_TEMP',
-          message: `Suhu pendingin engine melebihi ambang batas aman (${temp.toFixed(1)}°C > 90.0°C). Sirkulasi radiator perlu dicek.`,
+          message: `Suhu pendingin engine melebihi ambang batas aman (${temp.toFixed(1)}°C > ${TEST_THRESHOLDS.temp.warn.toFixed(1)}°C). Sirkulasi radiator perlu dicek.`,
           ruleStatus: 'ACTIVE'
         });
       }
     }
 
-    // 3. Tekanan Pelumas / Oli (oil_press_bar) - Dievaluasi saat RUNNING (Batas: < 2.5 / > 5.0 bar Critical, < 3.5 / > 4.5 bar Major)
+    // 3. Tekanan Pelumas / Oli (oil_press_bar) - Dievaluasi saat RUNNING / Mode Testing
     if (!isNaN(press) && isEngineRunning && !isPressSensorFault) {
-      if (press < 2.5 || press > 5.0 || t.press_status === 'CRITICAL') {
+      if (press < TEST_THRESHOLDS.oil.critLo || press > TEST_THRESHOLDS.oil.critHi || t.press_status === 'CRITICAL') {
         alarms.push({
           timestamp: time,
           level: 'CRITICAL',
           ruleType: 'OIL_PRESSURE',
-          message: `Tekanan oli pelumas di luar batas kritis (< 2.5 bar atau > 5.0 bar: ${press.toFixed(2)} bar). Bahaya fatal pelumasan!`,
+          message: `Tekanan oli pelumas di luar batas kritis (< ${TEST_THRESHOLDS.oil.critLo} bar atau > ${TEST_THRESHOLDS.oil.critHi} bar: ${press.toFixed(2)} bar). Bahaya fatal pelumasan!`,
           ruleStatus: 'ACTIVE'
         });
-      } else if (press < 3.5 || press > 4.5 || t.press_status === 'MAJOR') {
+      } else if (press < TEST_THRESHOLDS.oil.warnLo || press > TEST_THRESHOLDS.oil.warnHi || t.press_status === 'MAJOR') {
         alarms.push({
           timestamp: time,
           level: 'MAJOR',
           ruleType: 'OIL_PRESSURE',
-          message: `Tekanan oli pelumas menyimpang dari batas aman 3.5-4.5 bar (${press.toFixed(2)} bar). Periksa filter oli dan pompa.`,
+          message: `Tekanan oli pelumas menyimpang dari batas aman ${TEST_THRESHOLDS.oil.warnLo}-${TEST_THRESHOLDS.oil.warnHi} bar (${press.toFixed(2)} bar). Periksa filter oli dan pompa.`,
           ruleStatus: 'ACTIVE'
         });
       }
@@ -1041,25 +1094,24 @@
       }
     }
 
-    // 6. Level Tangki Solar (fuel_level_mm) - Disesuaikan untuk Skala Wadah Lab 200 mm (20 cm)
-    // Batas Wadah Lab: < 40mm (< 4 cm / < 20%) Critical, < 80mm (< 8 cm / < 40%) Major
+    // 6. Level Tangki Solar (fuel_level_mm) - Disesuaikan dengan TEST_THRESHOLDS (Wadah Lab ~230 mm)
     const fuelMm = Number(t.fuel_level_mm);
     const isLevelCalibrated = (t.level_calibrated !== undefined) ? Boolean(t.level_calibrated) : true;
     if (!isNaN(fuelMm) && fuelMm > 0 && isLevelCalibrated) {
-      if (fuelMm < 40.0 || t.fuel_status === 'CRITICAL') {
+      if (fuelMm < TEST_THRESHOLDS.fuel.critLo || t.fuel_status === 'CRITICAL') {
         alarms.push({
           timestamp: time,
           level: 'CRITICAL',
           ruleType: 'FUEL_LEVEL',
-          message: `Level solar wadah lab kritis (< 40 mm: ${Math.round(fuelMm)} mm). Mesin berisiko kehabisan solar!`,
+          message: `Level solar wadah lab kritis (< ${TEST_THRESHOLDS.fuel.critLo} mm: ${Math.round(fuelMm)} mm). Mesin berisiko kehabisan solar!`,
           ruleStatus: 'ACTIVE'
         });
-      } else if (fuelMm < 80.0 || t.fuel_status === 'LOW' || t.fuel_status === 'MAJOR') {
+      } else if (fuelMm <= TEST_THRESHOLDS.fuel.warnLo || t.fuel_status === 'LOW' || t.fuel_status === 'MAJOR') {
         alarms.push({
           timestamp: time,
           level: 'MAJOR',
           ruleType: 'FUEL_LEVEL',
-          message: `Level solar wadah lab di bawah batas aman (< 80 mm: ${Math.round(fuelMm)} mm). Diperlukan pengisian solar.`,
+          message: `Level solar wadah lab di bawah batas aman (<= ${TEST_THRESHOLDS.fuel.warnLo} mm: ${Math.round(fuelMm)} mm). Diperlukan pengisian solar.`,
           ruleStatus: 'ACTIVE'
         });
       }
@@ -1109,16 +1161,26 @@
       }
     }
 
-    // 9. Tegangan Baterai / Aki (battery_v) - Batas: < 24.0 V Major
+    // 9. Tegangan Baterai / Aki (battery_v) - Disesuaikan dengan TEST_THRESHOLDS
     const battV = Number(t.battery_v !== undefined ? t.battery_v : t.batt_volt_v);
-    if (!isNaN(battV) && battV > 0 && battV < 24.0) {
-      alarms.push({
-        timestamp: time,
-        level: 'MAJOR',
-        ruleType: 'BATTERY_FAULT',
-        message: `Tegangan baterai starter genset lemah (${battV.toFixed(1)} V < 24.0 V). Cek sistem alternator/charger aki.`,
-        ruleStatus: 'ACTIVE'
-      });
+    if (!isNaN(battV) && battV > 0) {
+      if (battV < TEST_THRESHOLDS.batt.critLo) {
+        alarms.push({
+          timestamp: time,
+          level: 'CRITICAL',
+          ruleType: 'BATTERY_FAULT',
+          message: `Tegangan baterai starter genset sangat kritis (${battV.toFixed(1)} V < ${TEST_THRESHOLDS.batt.critLo.toFixed(1)} V). Genset berisiko gagal starter!`,
+          ruleStatus: 'ACTIVE'
+        });
+      } else if (battV < TEST_THRESHOLDS.batt.warnLo) {
+        alarms.push({
+          timestamp: time,
+          level: 'MAJOR',
+          ruleType: 'BATTERY_FAULT',
+          message: `Tegangan baterai starter genset lemah (${battV.toFixed(1)} V < ${TEST_THRESHOLDS.batt.warnLo.toFixed(1)} V). Cek sistem alternator/charger aki.`,
+          ruleStatus: 'ACTIVE'
+        });
+      }
     }
 
     // 10. Engine State FAULT
@@ -1158,7 +1220,7 @@
 
     // update timestamp jika alarm masih aktif, atau unshift alarm baru (anti-duplikasi)
     activeList.forEach(newAlarm => {
-      const existing = state.alarmLog.find(item => item.ruleType === newAlarm.ruleType && 
+      const existing = state.alarmLog.find(item => item.ruleType === newAlarm.ruleType &&
         (item.ruleStatus === 'ACTIVE' || item.ruleStatus === 'ACTIVE_UNACK' || item.ruleStatus === 'ACTIVE_ACK'));
       if (existing) {
         existing.id = newAlarm.id || existing.id;
