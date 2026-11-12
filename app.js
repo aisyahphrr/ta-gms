@@ -68,7 +68,6 @@
     // 5. Mode Pengujian Rumahan (true = alarm tetap dievaluasi walau genset STOPPED)
     ignoreEngineRunning: true
   };
-  if (typeof window !== 'undefined') window.TEST_THRESHOLDS = TEST_THRESHOLDS;
 
   // State runtime aplikasi
   const state = {
@@ -463,14 +462,27 @@
       const ratedKw = 44.0;
       loadPct = parseFloat(((pKw / ratedKw) * 100).toFixed(1));
     }
-    let loadStatus = getLatestVal('load_status') || null;
+    // Ambil status sensor dari alarm aktif resmi Mastify jika tersedia di state runtime
+    // HMI Read-Only: Status kartu Panel 01 sepenuhnya mengikuti evaluasi server Mastify
+    function getActiveServerAlarmSeverity(ruleType) {
+      if (!state.alarmLog || !Array.isArray(state.alarmLog)) return null;
+      const found = state.alarmLog.find(a => 
+        a.ruleType === ruleType && 
+        (a.ruleStatus === 'ACTIVE' || a.ruleStatus === 'ACTIVE_UNACK' || a.ruleStatus === 'ACTIVE_ACK')
+      );
+      return found ? found.level : null;
+    }
+
+    // Evaluasi status beban (Prioritas: Alarm Server -> Telemetry -> Fallback)
+    const serverLoadAlarm = getActiveServerAlarmSeverity('LOAD_FAULT');
+    let loadStatus = serverLoadAlarm || getLatestVal('load_status') || null;
     if (!loadStatus && loadPct !== null && loadPct !== undefined) {
       if (loadPct > 100) loadStatus = 'OVERLOAD';
       else if (loadPct < 30) loadStatus = 'UNDERLOAD';
       else loadStatus = 'OPTIMAL';
     }
 
-    // Hitung estimasi volume solar & status level (Disesuaikan untuk skala wadah lab uji ~230 mm / 23 cm)
+    // Hitung estimasi volume solar & status level (Prioritas: Rule Chain Mastify fuel_vol_l)
     const fuelMmVal = safeNum(getLatestVal('fuel_level_mm'));
     let fuelVolVal = safeNum(getLatestVal('fuel_vol_l'));
     if ((fuelVolVal === null || fuelVolVal === undefined) && fuelMmVal !== null && fuelMmVal !== undefined) {
@@ -478,30 +490,17 @@
       fuelVolVal = parseFloat((fuelMmVal * 0.0425).toFixed(2));
     }
 
-    // Evaluasi status ketinggian solar (Prioritas: Mastify API -> Fallback TEST_THRESHOLDS)
-    let fuelStatusVal = getLatestVal('fuel_status') || null;
-    if (!fuelStatusVal && fuelMmVal !== null && fuelMmVal !== undefined) {
-      if (fuelMmVal < TEST_THRESHOLDS.fuel.critLo) fuelStatusVal = 'CRITICAL';
-      else if (fuelMmVal <= TEST_THRESHOLDS.fuel.warnLo) fuelStatusVal = 'LOW';
-      else fuelStatusVal = 'NORMAL';
-    }
+    // Evaluasi status ketinggian solar (Prioritas: Alarm Server Mastify -> Telemetry -> Normal)
+    const serverFuelAlarm = getActiveServerAlarmSeverity('FUEL_LEVEL');
+    let fuelStatusVal = serverFuelAlarm || getLatestVal('fuel_status') || 'NORMAL';
 
-    // Evaluasi status suhu mesin (Prioritas: Mastify API -> Fallback TEST_THRESHOLDS)
-    let tempStatusVal = getLatestVal('temp_status') || null;
-    if (!tempStatusVal && coolantTemp !== null && coolantTemp !== undefined) {
-      if (coolantTemp > TEST_THRESHOLDS.temp.crit) tempStatusVal = 'CRITICAL';
-      else if (coolantTemp > TEST_THRESHOLDS.temp.warn) tempStatusVal = 'MAJOR';
-      else tempStatusVal = 'NORMAL';
-    }
+    // Evaluasi status suhu mesin (Prioritas: Alarm Server Mastify -> Telemetry -> Normal)
+    const serverTempAlarm = getActiveServerAlarmSeverity('ENGINE_TEMP');
+    let tempStatusVal = serverTempAlarm || getLatestVal('temp_status') || 'NORMAL';
 
-    // Evaluasi status tekanan oli (Prioritas: Mastify API -> Fallback TEST_THRESHOLDS)
-    const oilPressVal = safeNum(getLatestVal('oil_press_bar', 'pressure'));
-    let pressStatusVal = getLatestVal('press_status') || null;
-    if (!pressStatusVal && oilPressVal !== null && oilPressVal !== undefined) {
-      if (oilPressVal < TEST_THRESHOLDS.oil.critLo || oilPressVal > TEST_THRESHOLDS.oil.critHi) pressStatusVal = 'CRITICAL';
-      else if (oilPressVal < TEST_THRESHOLDS.oil.warnLo || oilPressVal > TEST_THRESHOLDS.oil.warnHi) pressStatusVal = 'MAJOR';
-      else pressStatusVal = 'NORMAL';
-    }
+    // Evaluasi status tekanan oli (Prioritas: Alarm Server Mastify -> Telemetry -> Normal)
+    const serverPressAlarm = getActiveServerAlarmSeverity('OIL_PRESSURE');
+    let pressStatusVal = serverPressAlarm || getLatestVal('press_status') || 'NORMAL';
 
     // Hitung estimasi konsumsi BBM kumulatif (Model SFC Genset: Section 3.I Buku Induk)
     let fuelEstVal = safeNum(getLatestVal('fuel_est_l', 'fuelEstimate'));
