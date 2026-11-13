@@ -856,6 +856,19 @@
     }
   }
 
+  // Memeriksa status keaktifan perangkat fisik di platform Mastify (Server Attribute: active)
+  async function fetchDeviceActiveStatus() {
+    try {
+      const url = getMastifyApiEndpoint(`/plugins/telemetry/DEVICE/${state.config.deviceId}/values/attributes?serverKeys=active`);
+      const res = await apiClient.get(url);
+      const list = Array.isArray(res.data) ? res.data : [];
+      const activeEntry = list.find(a => a.key === 'active');
+      return activeEntry ? Boolean(activeEntry.value) : true;
+    } catch (_) {
+      return true;
+    }
+  }
+
   // normalisasi jenis alarm ke kode teknis acuan
   // lookup terpadu: normalisasi kode rule + pesan default fallback jika Mastify tidak kirim field message
   const ALARM_RULE_MAP = {

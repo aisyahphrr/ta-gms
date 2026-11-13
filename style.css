@@ -257,6 +257,12 @@ body {
   animation: pulse-indigo 2s infinite ease-in-out;
 }
 
+.rocker-led.inactive {
+  background-color: #94a3b8;
+  box-shadow: none;
+  animation: none;
+}
+
 .rocker-led.error {
   background-color: var(--color-critical);
   box-shadow: 0 0 10px rgba(220, 38, 38, 0.85);
