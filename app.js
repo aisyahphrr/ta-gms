@@ -816,7 +816,7 @@
 
       // Debug: log semua alarm yang lolos filter (berguna saat troubleshoot live)
       if (activeList.length > 0) {
-        console.info('[GMS Alarm] Raw alarm lolos filter dari Mastify:', activeList.map(function(a) {
+        console.info('[GMS Alarm] Raw alarm lolos filter dari Mastify:', activeList.map(function (a) {
           return { type: a.type, status: a.status, clearTs: a.clearTs, details: a.details };
         }));
       }
@@ -1010,10 +1010,11 @@
       activeRuleMap.set(a.ruleType, a);
     });
 
-    // transisi ke CLEARED jika kondisi telemetri sudah normal kembali
-    // ACTIVE_ACK tidak di-CLEAR paksa di sini — biarkan Mastify yang tentukan clearTs-nya
+    // Transisi ke CLEARED jika kondisi telemetri sudah normal kembali atau alarm sudah tidak aktif di server Mastify
+    // Mencakup status ACTIVE_ACK agar alarm yang sudah di-acknowledge otomatis clear saat pulih di Mastify
     state.alarmLog.forEach(item => {
-      if ((item.ruleStatus === 'ACTIVE' || item.ruleStatus === 'ACTIVE_UNACK') && !activeRuleMap.has(item.ruleType)) {
+      const isStillActive = activeRuleMap.has(item.ruleType);
+      if ((item.ruleStatus === 'ACTIVE' || item.ruleStatus === 'ACTIVE_UNACK' || item.ruleStatus === 'ACTIVE_ACK') && !isStillActive) {
         item.ruleStatus = 'CLEARED';
         item.timestamp = timeStr;
         item.message = `Parameter ${item.ruleType} telah kembali normal dalam batas toleransi aman.`;
@@ -1059,7 +1060,7 @@
       sourceNote.textContent = `Evaluasi: ${sourceLabel}`;
     }
 
-    const activeCount = state.alarmLog.filter(a => a.ruleStatus === 'ACTIVE' || a.ruleStatus === 'ACTIVE_UNACK').length;
+    const activeCount = state.alarmLog.filter(a => a.ruleStatus === 'ACTIVE' || a.ruleStatus === 'ACTIVE_UNACK' || a.ruleStatus === 'ACTIVE_ACK').length;
     const countText = DOM.alarmActiveCountText || document.getElementById('alarmActiveCountText');
     if (countText) {
       countText.textContent = `${activeCount} Alarm Aktif`;
