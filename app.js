@@ -529,6 +529,11 @@
       return found ? normalizeSeverityTier(found.level) : null;
     }
 
+    // Sinkronisasi status kesehatan loop NAMUR jika terdeteksi alarm sensor fault dari Mastify
+    if (!data.ai1_st && getSeverity('SENSOR_FAULT_AI1')) data.ai1_st = 'FAULT_LOW';
+    if (!data.ai2_st && getSeverity('SENSOR_FAULT_AI2')) data.ai2_st = 'FAULT_LOW';
+    if (!data.ai3_st && getSeverity('SENSOR_FAULT_AI3')) data.ai3_st = 'FAULT_LOW';
+
     // 1. Suhu Mesin: Alarm ENGINE_TEMP aktif -> CRITICAL / MAJOR, jika tidak -> NORMAL
     data.temp_status = getSeverity('ENGINE_TEMP') || 'NORMAL';
 
@@ -791,20 +796,30 @@
 
   // Mengambil daftar alarm aktif langsung dari server Mastify
   async function fetchMastifyAlarms() {
-    // Ambil ACTIVE_UNACK dan ACTIVE_ACK sekaligus agar alarm yg sudah di-ACK tidak hilang saat refresh
-    const url = getMastifyApiEndpoint(`/alarm/DEVICE/${state.config.deviceId}?pageSize=20&page=0&sortProperty=createdTime&sortOrder=DESC`);
+    // searchStatus=ACTIVE memfilter server-side untuk ACTIVE_UNACK dan ACTIVE_ACK
+    // Mencegah alarm aktif terdorong keluar pagination akibat banyaknya riwayat alarm CLEARED
+    const url = getMastifyApiEndpoint(`/alarm/DEVICE/${state.config.deviceId}?searchStatus=ACTIVE&pageSize=50&page=0&sortProperty=createdTime&sortOrder=DESC`);
 
     try {
       const res = await apiClient.get(url);
       const json = res.data;
 
       const rawList = Array.isArray(json.data) ? json.data : (Array.isArray(json) ? json : []);
-      // Filter ketat: hindari alarm CLEARED atau sudah ada clearTs
+      // Filter: buang alarm yang sudah berstatus CLEARED saja.
+      // JANGAN filter berdasarkan clearTs > 0 — ThingsBoard kadang mengisi clearTs dengan nilai
+      // non-zero pada alarm ACTIVE_UNACK/ACTIVE_ACK (misalnya FUEL_LEVEL), sehingga alarm aktif
+      // bisa terbuang secara salah.
       const activeList = rawList.filter(function (item) {
         const s = String(item.status || '').toUpperCase();
-        const isCleared = s.startsWith('CLEARED') || (item.clearTs && item.clearTs > 0);
-        return !isCleared;
+        return !s.startsWith('CLEARED');
       });
+
+      // Debug: log semua alarm yang lolos filter (berguna saat troubleshoot live)
+      if (activeList.length > 0) {
+        console.info('[GMS Alarm] Raw alarm lolos filter dari Mastify:', activeList.map(function(a) {
+          return { type: a.type, status: a.status, clearTs: a.clearTs, details: a.details };
+        }));
+      }
 
       if (!activeList || activeList.length === 0) return [];
 
@@ -872,21 +887,35 @@
   // normalisasi jenis alarm ke kode teknis acuan
   // lookup terpadu: normalisasi kode rule + pesan default fallback jika Mastify tidak kirim field message
   const ALARM_RULE_MAP = {
-    FREQ: { code: 'FREQ_FAULT', msg: 'Frekuensi alternator menyimpang di luar batas nominal 50.0 Hz.' },
+    // --- STANDAR ALARM KEYS (Eksak sesuai Device Profile Mastify) ---
+    OIL_PRESSURE: { code: 'OIL_PRESSURE', msg: 'Tekanan oli pelumas di luar rentang batas aman operasional.' },
+    ENGINE_TEMP: { code: 'ENGINE_TEMP', msg: 'Suhu pendingin engine terdeteksi melebihi ambang batas aman.' },
+    VOLTAGE_FAULT: { code: 'VOLTAGE_FAULT', msg: 'Tegangan alternator 3-fasa menyimpang dari regulasi normal.' },
+    FREQ_FAULT: { code: 'FREQ_FAULT', msg: 'Frekuensi output generator menyimpang di luar batas nominal 50.0 Hz.' },
+    LOAD_FAULT: { code: 'LOAD_FAULT', msg: 'Beban genset melebihi kapasitas daya nominal (overload).' },
+    CURRENT_IMBALANCE: { code: 'CURRENT_IMBALANCE', msg: 'Ketidakseimbangan arus 3-fasa NEMA melebihi ambang batas aman.' },
+    FUEL_LEVEL: { code: 'FUEL_LEVEL', msg: 'Level solar tangki genset di bawah batas aman operasional.' },
+    SENSOR_FAULT_AI1: { code: 'SENSOR_FAULT_AI1', msg: 'Sinyal loop 4-20mA sensor tekanan oli (AI1) fault: di luar rentang NAMUR NE43 (< 3.8mA / > 20.5mA).' },
+    SENSOR_FAULT_AI2: { code: 'SENSOR_FAULT_AI2', msg: 'Sinyal loop 4-20mA sensor suhu pendingin engine (AI2 PT100) fault: di luar rentang NAMUR NE43.' },
+    SENSOR_FAULT_AI3: { code: 'SENSOR_FAULT_AI3', msg: 'Sinyal loop 4-20mA sensor level solar (AI3 Hydrostatic) fault: di luar rentang NAMUR NE43.' },
+    BATTERY_FAULT: { code: 'BATTERY_FAULT', msg: 'Tegangan baterai starter lemah di bawah batas 24.0 V.' },
+    ENGINE_FAULT: { code: 'ENGINE_FAULT', msg: 'Anomali proteksi engine terdeteksi oleh rule chain.' },
+
+    // --- FALLBACK SUBSTRING KEYS (Untuk kompatibilitas format parsial) ---
+    FREQ: { code: 'FREQ_FAULT', msg: 'Frekuensi output generator menyimpang di luar batas nominal 50.0 Hz.' },
     TEMP: { code: 'ENGINE_TEMP', msg: 'Suhu pendingin engine terdeteksi melebihi ambang batas aman.' },
-    OIL: { code: 'OIL_PRESSURE', msg: 'Tekanan pelumas oli di bawah ambang batas aman.' },
-    PRESS: { code: 'OIL_PRESSURE', msg: 'Tekanan pelumas oli di bawah ambang batas aman.' },
-    VOLT: { code: 'VOLTAGE_FAULT', msg: 'Terdeteksi deviasi ketidakseimbangan tegangan 3-fasa NEMA.' },
-    NEMA: { code: 'VOLTAGE_FAULT', msg: 'Terdeteksi deviasi ketidakseimbangan tegangan 3-fasa NEMA.' },
-    SENSOR_FAULT_AI1: { code: 'SENSOR_FAULT_AI1', msg: 'Arus loop 4-20mA sensor tekanan oli di luar rentang NAMUR NE43 (< 3.8mA / > 20.5mA).' },
-    SENSOR: { code: 'SENSOR_FAULT_AI1', msg: 'Arus loop 4-20mA sensor di luar rentang standar NAMUR NE43.' },
-    NAMUR: { code: 'SENSOR_FAULT_AI1', msg: 'Arus loop 4-20mA sensor di luar rentang standar NAMUR NE43.' },
+    OIL: { code: 'OIL_PRESSURE', msg: 'Tekanan oli pelumas di luar rentang batas aman operasional.' },
+    PRESS: { code: 'OIL_PRESSURE', msg: 'Tekanan oli pelumas di luar rentang batas aman operasional.' },
+    VOLT: { code: 'VOLTAGE_FAULT', msg: 'Tegangan alternator 3-fasa menyimpang dari regulasi normal.' },
+    NEMA: { code: 'VOLTAGE_FAULT', msg: 'Tegangan alternator 3-fasa menyimpang dari regulasi normal.' },
+    SENSOR: { code: 'SENSOR_FAULT_AI1', msg: 'Sinyal loop 4-20mA sensor di luar rentang standar NAMUR NE43.' },
+    NAMUR: { code: 'SENSOR_FAULT_AI1', msg: 'Sinyal loop 4-20mA sensor di luar rentang standar NAMUR NE43.' },
     FUEL: { code: 'FUEL_LEVEL', msg: 'Level solar tangki genset di bawah batas aman operasional.' },
     BATT: { code: 'BATTERY_FAULT', msg: 'Tegangan baterai starter lemah di bawah batas 24.0 V.' },
     LOAD: { code: 'LOAD_FAULT', msg: 'Beban genset melebihi kapasitas daya nominal (overload).' },
     OVERLOAD: { code: 'LOAD_FAULT', msg: 'Beban genset melebihi kapasitas daya nominal (overload).' },
-    IMBAL: { code: 'CURRENT_IMBALANCE', msg: 'Ketidakseimbangan arus 3-fasa melebihi ambang batas NEMA.' },
-    CURREN: { code: 'CURRENT_IMBALANCE', msg: 'Ketidakseimbangan arus 3-fasa melebihi ambang batas NEMA.' },
+    IMBAL: { code: 'CURRENT_IMBALANCE', msg: 'Ketidakseimbangan arus 3-fasa NEMA melebihi ambang batas aman.' },
+    CURREN: { code: 'CURRENT_IMBALANCE', msg: 'Ketidakseimbangan arus 3-fasa NEMA melebihi ambang batas aman.' },
     ENGINE: { code: 'ENGINE_FAULT', msg: 'Anomali proteksi engine terdeteksi oleh rule chain.' },
     TRIP: { code: 'ENGINE_FAULT', msg: 'Anomali proteksi engine terdeteksi oleh rule chain.' },
     FAULT: { code: 'ENGINE_FAULT', msg: 'Anomali proteksi engine terdeteksi oleh rule chain.' }
@@ -894,12 +923,18 @@
 
   function formatAlarmRuleName(ruleType) {
     const r = String(ruleType || '').toUpperCase().trim();
+    // Prioritas: exact match terlebih dahulu, lalu substring
+    const exactKey = Object.keys(ALARM_RULE_MAP).find(k => r === k);
+    if (exactKey) return ALARM_RULE_MAP[exactKey].code;
     const match = Object.keys(ALARM_RULE_MAP).find(k => r.includes(k));
     return match ? ALARM_RULE_MAP[match].code : (r || 'SYS_ALARM');
   }
 
   function getDefaultAlarmMessage(type) {
     const t = String(type || '').toUpperCase();
+    // Prioritas: exact match terlebih dahulu, lalu substring
+    const exactKey = Object.keys(ALARM_RULE_MAP).find(k => t === k);
+    if (exactKey) return ALARM_RULE_MAP[exactKey].msg;
     const match = Object.keys(ALARM_RULE_MAP).find(k => t.includes(k));
     return match ? ALARM_RULE_MAP[match].msg : 'Peringatan anomali aktif dari Mastify Rule Chain.';
   }
@@ -948,7 +983,9 @@
       voltage: { id: null, isServerAlarm: false, timestamp: timeStr, level: 'CRITICAL', ruleType: 'VOLTAGE_FAULT', message: 'SIMULASI: Deviasi tegangan 3-fasa NEMA kritis (4.3% > 3.0%). Risiko overheat belitan alternator.', ruleStatus: 'ACTIVE' },
       freq: { id: null, isServerAlarm: false, timestamp: timeStr, level: 'MAJOR', ruleType: 'FREQ_FAULT', message: 'SIMULASI: Frekuensi alternator menyimpang dari nominal 50.0 Hz (48.2 Hz).', ruleStatus: 'ACTIVE' },
       imbalance: { id: null, isServerAlarm: false, timestamp: timeStr, level: 'CRITICAL', ruleType: 'CURRENT_IMBALANCE', message: 'SIMULASI: Ketidakseimbangan arus 3-fasa rata-rata kritis (48.5% > 40.0%).', ruleStatus: 'ACTIVE' },
-      sensor_ai1: { id: null, isServerAlarm: false, timestamp: timeStr, level: 'MAJOR', ruleType: 'SENSOR_FAULT_AI1', message: 'SIMULASI: Loop 4-20mA sensor AI1 Pressure Transducer terputus (< 3.8mA). NAMUR NE43 FAULT_LOW.', ruleStatus: 'ACTIVE' }
+      sensor_ai1: { id: null, isServerAlarm: false, timestamp: timeStr, level: 'MAJOR', ruleType: 'SENSOR_FAULT_AI1', message: 'SIMULASI: Loop 4-20mA sensor AI1 Pressure Transducer terputus (< 3.8mA). NAMUR NE43 FAULT_LOW.', ruleStatus: 'ACTIVE' },
+      sensor_ai2: { id: null, isServerAlarm: false, timestamp: timeStr, level: 'CRITICAL', ruleType: 'SENSOR_FAULT_AI2', message: 'SIMULASI: Loop 4-20mA sensor AI2 PT100 Suhu Pendingin Engine terputus (< 3.8mA). NAMUR NE43 FAULT_LOW.', ruleStatus: 'ACTIVE' },
+      sensor_ai3: { id: null, isServerAlarm: false, timestamp: timeStr, level: 'CRITICAL', ruleType: 'SENSOR_FAULT_AI3', message: 'SIMULASI: Loop 4-20mA sensor AI3 Hydrostatic Level Solar terputus (< 3.8mA). NAMUR NE43 FAULT_LOW.', ruleStatus: 'ACTIVE' }
     };
 
     if (sim && sim !== 'normal' && SIM_ALARMS[sim]) {
@@ -1513,20 +1550,30 @@
       renderRealtimePanel(frame);
       pushTimeseriesPoint(frame);
       renderMaintenancePanel(frame);
-      renderAlarmSystem(offlineAlarms, 'Offline Demo (DATA_LAB — dataLab.js)');
+      renderAlarmSystem(offlineAlarms, 'Offline (DATA_LAB — dataLab.js)');
+      console.info('[GMS Telemetry] Mode: OFFLINE | LED: Indigo/Ungu (Offline Simulasi)');
       return;
     }
 
     // MODE LIVE: sumber tunggal — REST API Mastify (Single Source of Truth)
     try {
-      // Polling telemetri dan alarm dari Mastify secara paralel
-      const [data, liveAlarms] = await Promise.all([
+      // Polling telemetri, alarm, dan status keaktifan perangkat fisik di Mastify
+      const [data, liveAlarms, isDeviceActive] = await Promise.all([
         fetchMastifyTelemetry(),
-        fetchMastifyAlarms()
+        fetchMastifyAlarms(),
+        fetchDeviceActiveStatus()
       ]);
       if (!data) throw new Error('Data telemetri kosong');
 
-      if (DOM.statusDot) DOM.statusDot.className = 'rocker-led online';
+      if (DOM.statusDot) {
+        if (!isDeviceActive) {
+          DOM.statusDot.className = 'rocker-led inactive';
+          console.info('[GMS Telemetry] Mode: LIVE REST API | Perangkat Mastify: Inactive/Standby | LED: Abu-abu (Inactive)');
+        } else {
+          DOM.statusDot.className = 'rocker-led online';
+          console.info('[GMS Telemetry] Mode: LIVE REST API | Perangkat Mastify: Active | LED: Hijau (Online)');
+        }
+      }
       if (DOM.dataSourceText) DOM.dataSourceText.textContent = 'LIVE REST API (Mastify)';
 
       // 1. Simpan & Render Alarm Resmi Mastify ke Panel 03
@@ -1544,7 +1591,7 @@
       renderMaintenancePanel(data);
 
     } catch (err) {
-      console.warn('[GMS Polling] Gagal menghubungi Mastify API:', err.message);
+      console.warn(`[GMS Telemetry] Mode: LIVE REST API | Status: Terputus (${err.message}) | LED: Merah (Error)`);
 
       if (DOM.statusDot) DOM.statusDot.className = 'rocker-led error';
       if (DOM.dataSourceText) DOM.dataSourceText.textContent = `LIVE API: Terputus (${err.message})`;
@@ -1596,6 +1643,17 @@
       frame.ai1_st = 'FAULT_LOW';
       frame.oil_press_bar = null; // sensor faulty — tidak ada pembacaan valid
       frame.engine_state_note = 'SIMULASI SIDANG: SENSOR_FAULT_AI1 — Loop 4-20mA Putus';
+    } else if (state.activeSimulation === 'sensor_ai2') {
+      // Skenario simulasi: loop sensor suhu pendingin engine terputus
+      frame.ai2_st = 'FAULT_LOW';
+      frame.engine_temp_c = null; // sensor faulty — tidak ada pembacaan valid
+      frame.engine_state_note = 'SIMULASI SIDANG: SENSOR_FAULT_AI2 — Loop 4-20mA PT100 Putus';
+    } else if (state.activeSimulation === 'sensor_ai3') {
+      // Skenario simulasi: loop sensor level solar terputus
+      frame.ai3_st = 'FAULT_LOW';
+      frame.fuel_level_mm = null; // sensor faulty — tidak ada pembacaan valid
+      frame.fuel_vol_l = null;
+      frame.engine_state_note = 'SIMULASI SIDANG: SENSOR_FAULT_AI3 — Loop 4-20mA Hydrostatic Putus';
     }
 
     return frame;
@@ -1603,7 +1661,7 @@
 
   // trigger skenario simulasi demo sidang (tanpa tombol di web: via Keyboard atau Console)
   window.gmsSimulate = function (scenarioKey) {
-    const valid = ['normal', 'temp', 'oil', 'voltage', 'freq', 'imbalance', 'sensor_ai1'];
+    const valid = ['normal', 'temp', 'oil', 'voltage', 'freq', 'imbalance', 'sensor_ai1', 'sensor_ai2', 'sensor_ai3'];
     const key = String(scenarioKey || 'normal').toLowerCase();
     state.activeSimulation = valid.includes(key) ? key : 'normal';
     console.info(`[GMS Demo Simulasi] Skenario aktif: ${state.activeSimulation.toUpperCase()}`);
@@ -1615,6 +1673,7 @@
   function setOperationMode(mode) {
     if (mode === state.currentMode) return;
     state.currentMode = mode;
+    console.info(`[GMS Mode] Pengguna mengalihkan mode operasi ke: ${mode === MODES.LIVE ? 'LIVE REST API' : 'OFFLINE'}`);
     updateModeUI();
     executeTelemetryCycle();
   }
@@ -1647,7 +1706,7 @@
         DOM.dotOffline.classList.remove('hidden');
         DOM.dotOffline.className = 'rocker-led offline';
       }
-      if (DOM.dataSourceText) DOM.dataSourceText.textContent = 'OFFLINE DEMO (Local Data)';
+      if (DOM.dataSourceText) DOM.dataSourceText.textContent = 'OFFLINE (Local Data)';
     }
   }
 
@@ -1714,7 +1773,9 @@
       else if (k === '3' || k === 'v') window.gmsSimulate('voltage');
       else if (k === '4' || k === 'f') window.gmsSimulate('freq');
       else if (k === '5' || k === 'i') window.gmsSimulate('imbalance');   // Simulasi ketidakseimbangan arus
-      else if (k === '6' || k === 's') window.gmsSimulate('sensor_ai1'); // Simulasi anomali sensor
+      else if (k === '6' || k === 's') window.gmsSimulate('sensor_ai1'); // Simulasi anomali sensor AI1
+      else if (k === '7') window.gmsSimulate('sensor_ai2');           // Simulasi anomali sensor AI2
+      else if (k === '8') window.gmsSimulate('sensor_ai3');           // Simulasi anomali sensor AI3
       else if (k === 'c') window.gmsSimulate('normal');
     });
 
