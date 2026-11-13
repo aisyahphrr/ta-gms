@@ -263,6 +263,18 @@ body {
   animation: none;
 }
 
+/* LED kuning — hardware standby: server Mastify hidup, tapi ESP32 berhenti kirim data */
+.rocker-led.stale {
+  background-color: #d97706;
+  box-shadow: 0 0 8px rgba(217, 119, 6, 0.75);
+  animation: pulse-amber 2s infinite ease-in-out;
+}
+
+@keyframes pulse-amber {
+  0%, 100% { opacity: 1; }
+  50%       { opacity: 0.45; }
+}
+
 .rocker-led.error {
   background-color: var(--color-critical);
   box-shadow: 0 0 10px rgba(220, 38, 38, 0.85);

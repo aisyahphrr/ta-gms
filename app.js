@@ -42,7 +42,8 @@
     offlineFrameIndex: 0,
     currentAlarms: [],
     alarmLog: [],
-    activeSimulation: 'normal'
+    activeSimulation: 'normal',
+    lastTelemetryTs: 0
   };
 
   // Helper akses penyimpanan lokal browser (localStorage)
@@ -1566,16 +1567,35 @@
       ]);
       if (!data) throw new Error('Data telemetri kosong');
 
+      // --- STALENESS CHECK: deteksi hardware offline meski server Mastify masih respons ---
+      // Jika data telemetri tidak diperbarui >60 detik, hardware (ESP32) kemungkinan
+      // sudah disconnect meskipun atribut 'active' di ThingsBoard belum timeout.
+      // publish_interval_s = 10 detik → threshold 60 detik = 6× interval = aman.
+      const STALE_THRESHOLD_MS = 60000;
+      const ageMs = state.lastTelemetryTs > 0 ? (Date.now() - state.lastTelemetryTs) : 0;
+      const isStale = state.lastTelemetryTs > 0 && ageMs > STALE_THRESHOLD_MS;
+
       if (DOM.statusDot) {
         if (!isDeviceActive) {
           DOM.statusDot.className = 'rocker-led inactive';
           console.info('[GMS Telemetry] Mode: LIVE REST API | Perangkat Mastify: Inactive/Standby | LED: Abu-abu (Inactive)');
+        } else if (isStale) {
+          DOM.statusDot.className = 'rocker-led stale';
+          const staleSec = Math.round(ageMs / 1000);
+          console.warn(`[GMS Telemetry] Mode: LIVE REST API | Hardware Standby (data terakhir ${staleSec}s lalu) | LED: Kuning (Stale)`);
         } else {
           DOM.statusDot.className = 'rocker-led online';
           console.info('[GMS Telemetry] Mode: LIVE REST API | Perangkat Mastify: Active | LED: Hijau (Online)');
         }
       }
-      if (DOM.dataSourceText) DOM.dataSourceText.textContent = 'LIVE REST API (Mastify)';
+      if (DOM.dataSourceText) {
+        if (isStale) {
+          const staleSec = Math.round(ageMs / 1000);
+          DOM.dataSourceText.textContent = `LIVE REST API (Mastify) — Hardware Standby: data terakhir ${staleSec}s lalu`;
+        } else {
+          DOM.dataSourceText.textContent = 'LIVE REST API (Mastify)';
+        }
+      }
 
       // 1. Simpan & Render Alarm Resmi Mastify ke Panel 03
       if (liveAlarms !== null) {
@@ -1590,6 +1610,19 @@
       renderRealtimePanel(data);
       pushTimeseriesPoint(data);
       renderMaintenancePanel(data);
+
+      // 4. Perbarui label sinkron — tambahkan keterangan stale jika hardware standby
+      if (DOM.lastSyncLabel) {
+        const timeStr = new Date().toLocaleTimeString('id-ID', { hour: '2-digit', minute: '2-digit', second: '2-digit' });
+        if (isStale) {
+          const staleSec = Math.round(ageMs / 1000);
+          DOM.lastSyncLabel.textContent = `Sinkron: ${timeStr} WIB — ⚠ Hardware Standby (data lama ${staleSec}s)`;
+          DOM.lastSyncLabel.style.color = '#d97706'; // amber
+        } else {
+          DOM.lastSyncLabel.textContent = `Sinkron: ${timeStr} WIB`;
+          DOM.lastSyncLabel.style.color = '';
+        }
+      }
 
     } catch (err) {
       console.warn(`[GMS Telemetry] Mode: LIVE REST API | Status: Terputus (${err.message}) | LED: Merah (Error)`);
