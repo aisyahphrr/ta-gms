@@ -1594,7 +1594,7 @@
           console.info('[GMS Telemetry] Mode: LIVE REST API | Perangkat Mastify: Inactive/Standby | LED: Abu-abu (Inactive)');
         } else if (isStale) {
           DOM.statusDot.className = 'rocker-led stale';
-          console.warn(`[GMS Telemetry] Mode: LIVE REST API | HW Standby (${staleStr}) | LED: Kuning (Stale)`);
+          console.warn(`[GMS Telemetry] Mode: LIVE REST API | HW Standby (${staleSec}s lalu) | LED: Kuning (Stale)`);
         } else {
           DOM.statusDot.className = 'rocker-led online';
           console.info('[GMS Telemetry] Mode: LIVE REST API | Perangkat Mastify: Active | LED: Hijau (Online)');
