@@ -1585,6 +1585,8 @@
       const STALE_THRESHOLD_MS = 60000;
       const ageMs = state.lastTelemetryTs > 0 ? (Date.now() - state.lastTelemetryTs) : 0;
       const isStale = state.lastTelemetryTs > 0 && ageMs > STALE_THRESHOLD_MS;
+      const staleSec = Math.round(ageMs / 1000);
+      const staleStr = staleSec < 60 ? `${staleSec}s` : `${Math.round(staleSec / 60)}m`;
 
       if (DOM.statusDot) {
         if (!isDeviceActive) {
@@ -1592,8 +1594,7 @@
           console.info('[GMS Telemetry] Mode: LIVE REST API | Perangkat Mastify: Inactive/Standby | LED: Abu-abu (Inactive)');
         } else if (isStale) {
           DOM.statusDot.className = 'rocker-led stale';
-          const staleSec = Math.round(ageMs / 1000);
-          console.warn(`[GMS Telemetry] Mode: LIVE REST API | Hardware Standby (data terakhir ${staleSec}s lalu) | LED: Kuning (Stale)`);
+          console.warn(`[GMS Telemetry] Mode: LIVE REST API | HW Standby (${staleStr}) | LED: Kuning (Stale)`);
         } else {
           DOM.statusDot.className = 'rocker-led online';
           console.info('[GMS Telemetry] Mode: LIVE REST API | Perangkat Mastify: Active | LED: Hijau (Online)');
@@ -1601,8 +1602,7 @@
       }
       if (DOM.dataSourceText) {
         if (isStale) {
-          const staleSec = Math.round(ageMs / 1000);
-          DOM.dataSourceText.textContent = `LIVE REST API (Mastify) — Hardware Standby: data terakhir ${staleSec}s lalu`;
+          DOM.dataSourceText.textContent = `LIVE REST API (Mastify) • HW Standby (${staleStr})`;
         } else {
           DOM.dataSourceText.textContent = 'LIVE REST API (Mastify)';
         }
@@ -1626,8 +1626,7 @@
       if (DOM.lastSyncLabel) {
         const timeStr = new Date().toLocaleTimeString('id-ID', { hour: '2-digit', minute: '2-digit', second: '2-digit' });
         if (isStale) {
-          const staleSec = Math.round(ageMs / 1000);
-          DOM.lastSyncLabel.textContent = `Sinkron: ${timeStr} WIB — ⚠ Hardware Standby (data lama ${staleSec}s)`;
+          DOM.lastSyncLabel.textContent = `Sinkron: ${timeStr} WIB • ⚠ HW Standby (${staleStr})`;
           DOM.lastSyncLabel.style.color = '#d97706'; // amber
         } else {
           DOM.lastSyncLabel.textContent = `Sinkron: ${timeStr} WIB`;
