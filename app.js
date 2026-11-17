@@ -363,11 +363,22 @@
       return null;
     }
 
-    // Ekstraksi timestamp data telemetri terbaru untuk health check 30 detik
+    // Ekstraksi timestamp data telemetri terbaru dari parameter sensor fisik nyata
+    // Catatan: Hanya periksa entri dengan nilai valid (bukan null/undefined)
+    // karena ThingsBoard sering mengembalikan timestamp request saat ini untuk key hantu/null.
+    const HARDWARE_KEYS = ['oil_press_bar', 'engine_temp_c', 'fuel_level_mm', 'ai1_st', 'ai2_st', 'ai3_st'];
     let maxTs = 0;
-    for (const k in raw) {
-      if (Array.isArray(raw[k]) && raw[k].length > 0 && raw[k][0].ts) {
+    for (const k of HARDWARE_KEYS) {
+      if (Array.isArray(raw[k]) && raw[k].length > 0 && raw[k][0].ts && raw[k][0].value !== null && raw[k][0].value !== undefined) {
         if (raw[k][0].ts > maxTs) maxTs = raw[k][0].ts;
+      }
+    }
+    // Fallback jika sensor fisik di atas belum ada: cari di seluruh key yang bernilai valid (bukan null)
+    if (maxTs === 0) {
+      for (const k in raw) {
+        if (Array.isArray(raw[k]) && raw[k].length > 0 && raw[k][0].ts && raw[k][0].value !== null && raw[k][0].value !== undefined) {
+          if (raw[k][0].ts > maxTs) maxTs = raw[k][0].ts;
+        }
       }
     }
     if (maxTs > 0) {
