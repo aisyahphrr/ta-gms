@@ -341,7 +341,7 @@
   }
 
   function parseMastifyResponse(raw) {
-    if (!raw || typeof raw !== 'object') return null;
+    if (!raw || typeof raw !== 'object' || Array.isArray(raw)) return null;
 
     function getLatestVal(...candidateKeys) {
       for (const k of candidateKeys) {
@@ -567,7 +567,7 @@
 
     // Aux metadata (Putaran Mesin RPM, Tegangan Aki VB & Frekuensi Alternator)
     if (DOM.valEngSpeedRpm) {
-      if (data.eng_speed_rpm !== undefined && data.eng_speed_rpm !== null) {
+      if (data.eng_speed_rpm !== undefined && data.eng_speed_rpm !== null && !isNaN(Number(data.eng_speed_rpm))) {
         DOM.valEngSpeedRpm.textContent = Math.round(Number(data.eng_speed_rpm));
       } else if (!data.engine_state || data.engine_state === 'STOPPED') {
         DOM.valEngSpeedRpm.textContent = '0';
@@ -576,33 +576,31 @@
       }
     }
     if (DOM.valBatteryV) {
-      DOM.valBatteryV.textContent = (data.battery_v !== null && data.battery_v !== undefined)
-        ? Number(data.battery_v).toFixed(1) + ' V' : '-- V';
+      const bStr = formatNum(data.battery_v, 1);
+      DOM.valBatteryV.textContent = (bStr !== '--') ? bStr + ' V' : '-- V';
     }
     if (DOM.valFreqHz) {
-      DOM.valFreqHz.textContent = (data.freq_hz !== null && data.freq_hz !== undefined)
-        ? Number(data.freq_hz).toFixed(1) + ' Hz' : '-- Hz';
+      const fStr = formatNum(data.freq_hz, 1);
+      DOM.valFreqHz.textContent = (fStr !== '--') ? fStr + ' Hz' : '-- Hz';
     }
 
     // update 4 kartu telemetri utama (suhu, oli, level solar, beban)
     if (DOM.valEngineTemp) {
-      DOM.valEngineTemp.textContent = (data.engine_temp_c !== null && data.engine_temp_c !== undefined)
-        ? Number(data.engine_temp_c).toFixed(1) : '--';
+      DOM.valEngineTemp.textContent = formatNum(data.engine_temp_c, 1);
     }
 
     if (DOM.valOilPressure) {
-      DOM.valOilPressure.textContent = (data.oil_press_bar !== null && data.oil_press_bar !== undefined)
-        ? Number(data.oil_press_bar).toFixed(2) : '--';
+      DOM.valOilPressure.textContent = formatNum(data.oil_press_bar, 2);
     }
 
     if (DOM.valFuelLevelMm) {
-      DOM.valFuelLevelMm.textContent = (data.fuel_level_mm !== null && data.fuel_level_mm !== undefined)
+      DOM.valFuelLevelMm.textContent = (data.fuel_level_mm !== null && data.fuel_level_mm !== undefined && !isNaN(Number(data.fuel_level_mm)))
         ? Math.round(Number(data.fuel_level_mm)) : '--';
     }
 
-    const hasLoad = (data.load_pct !== null && data.load_pct !== undefined);
+    const hasLoad = (data.load_pct !== null && data.load_pct !== undefined && !isNaN(Number(data.load_pct)));
     if (DOM.valLoadPct) {
-      DOM.valLoadPct.textContent = hasLoad ? Number(data.load_pct).toFixed(1) : '--';
+      DOM.valLoadPct.textContent = formatNum(data.load_pct, 1);
     }
     if (DOM.barLoadPct) {
       DOM.barLoadPct.style.width = hasLoad ? Math.min(Math.max(Number(data.load_pct), 0), 100) + '%' : '0%';
@@ -610,61 +608,66 @@
     updateStatusPill(DOM.pillLoadStatus, hasLoad ? (data.load_status || 'NORMAL') : '--');
 
     // 3. Konsistensi Tegangan 3-Fasa & Deviasi NEMA
-    const hasV1 = (data.v_l1 !== null && data.v_l1 !== undefined);
-    const hasV2 = (data.v_l2 !== null && data.v_l2 !== undefined);
-    const hasV3 = (data.v_l3 !== null && data.v_l3 !== undefined);
+    const hasV1 = (data.v_l1 !== null && data.v_l1 !== undefined && !isNaN(Number(data.v_l1)));
+    const hasV2 = (data.v_l2 !== null && data.v_l2 !== undefined && !isNaN(Number(data.v_l2)));
+    const hasV3 = (data.v_l3 !== null && data.v_l3 !== undefined && !isNaN(Number(data.v_l3)));
 
-    DOM.valV11.textContent = hasV1 ? Number(data.v_l1).toFixed(1) : '--';
-    DOM.valV12.textContent = hasV2 ? Number(data.v_l2).toFixed(1) : '--';
-    DOM.valV13.textContent = hasV3 ? Number(data.v_l3).toFixed(1) : '--';
+    if (DOM.valV11) DOM.valV11.textContent = hasV1 ? formatNum(data.v_l1, 1) : '--';
+    if (DOM.valV12) DOM.valV12.textContent = hasV2 ? formatNum(data.v_l2, 1) : '--';
+    if (DOM.valV13) DOM.valV13.textContent = hasV3 ? formatNum(data.v_l3, 1) : '--';
 
-    const hasUnbal = (data.v_unbal_pct !== null && data.v_unbal_pct !== undefined);
+    const hasUnbal = (data.v_unbal_pct !== null && data.v_unbal_pct !== undefined && !isNaN(Number(data.v_unbal_pct)));
     if (DOM.valUnbalPct) {
-      DOM.valUnbalPct.textContent = hasUnbal ? Number(data.v_unbal_pct).toFixed(1) + '%' : '--%';
+      const uStr = formatNum(data.v_unbal_pct, 1);
+      DOM.valUnbalPct.textContent = (uStr !== '--') ? uStr + '%' : '--%';
     }
 
-    const hasIUnbal = (data.i_unbal_pct !== null && data.i_unbal_pct !== undefined);
+    const hasIUnbal = (data.i_unbal_pct !== null && data.i_unbal_pct !== undefined && !isNaN(Number(data.i_unbal_pct)));
     if (DOM.valIUnbalPct) {
-      DOM.valIUnbalPct.textContent = hasIUnbal ? Number(data.i_unbal_pct).toFixed(1) + '%' : '--%';
+      const iuStr = formatNum(data.i_unbal_pct, 1);
+      DOM.valIUnbalPct.textContent = (iuStr !== '--') ? iuStr + '%' : '--%';
     }
 
     renderNemaVoltageBalance(data.voltage_balance, data.v_unbal_pct);
 
     // Arus beban 3-fasa
-    if (DOM.valI1) DOM.valI1.textContent = (data.i_l1 !== null && data.i_l1 !== undefined) ? formatNum(data.i_l1, 2) : '--';
-    if (DOM.valI2) DOM.valI2.textContent = (data.i_l2 !== null && data.i_l2 !== undefined) ? formatNum(data.i_l2, 2) : '--';
-    if (DOM.valI3) DOM.valI3.textContent = (data.i_l3 !== null && data.i_l3 !== undefined) ? formatNum(data.i_l3, 2) : '--';
+    if (DOM.valI1) DOM.valI1.textContent = formatNum(data.i_l1, 2);
+    if (DOM.valI2) DOM.valI2.textContent = formatNum(data.i_l2, 2);
+    if (DOM.valI3) DOM.valI3.textContent = formatNum(data.i_l3, 2);
 
     // Daya aktif, daya semu, dan faktor daya
-    if (DOM.valPKw) DOM.valPKw.textContent = (data.p_kw !== null && data.p_kw !== undefined)
-      ? formatNum(data.p_kw, 2) + ' kW' : '--';
-    if (DOM.valSKva) DOM.valSKva.textContent = (data.s_kva !== null && data.s_kva !== undefined)
-      ? formatNum(data.s_kva, 2) + ' kVA' : '--';
-    if (DOM.valPf) DOM.valPf.textContent = (data.pf !== null && data.pf !== undefined)
-      ? formatNum(data.pf, 2) : '--';
+    if (DOM.valPKw) {
+      const pStr = formatNum(data.p_kw, 2);
+      DOM.valPKw.textContent = (pStr !== '--') ? pStr + ' kW' : '--';
+    }
+    if (DOM.valSKva) {
+      const sStr = formatNum(data.s_kva, 2);
+      DOM.valSKva.textContent = (sStr !== '--') ? sStr + ' kVA' : '--';
+    }
+    if (DOM.valPf) DOM.valPf.textContent = formatNum(data.pf, 2);
 
     // Ketidakseimbangan arus 3-fasa sesuai standar NEMA
     if (DOM.badgeIUnbal) {
       const iu = data.i_unbal_pct;
-      if (iu === null || iu === undefined) {
+      if (iu === null || iu === undefined || isNaN(Number(iu))) {
         DOM.badgeIUnbal.textContent = 'ARUS --';
         DOM.badgeIUnbal.className = 'voltage-badge';
       } else if (Number(iu) > 40) {
-        DOM.badgeIUnbal.textContent = 'ARUS KRITIS (' + Number(iu).toFixed(1) + '%)';
+        DOM.badgeIUnbal.textContent = 'ARUS KRITIS (' + formatNum(iu, 1) + '%)';
         DOM.badgeIUnbal.className = 'voltage-badge badge-nema-critical';
       } else if (Number(iu) > 20) {
-        DOM.badgeIUnbal.textContent = 'ARUS ASIMETRIS (' + Number(iu).toFixed(1) + '%)';
+        DOM.badgeIUnbal.textContent = 'ARUS ASIMETRIS (' + formatNum(iu, 1) + '%)';
         DOM.badgeIUnbal.className = 'voltage-badge badge-nema-warning';
       } else {
-        DOM.badgeIUnbal.textContent = 'ARUS SEIMBANG (' + Number(iu).toFixed(1) + '%)';
+        DOM.badgeIUnbal.textContent = 'ARUS SEIMBANG (' + formatNum(iu, 1) + '%)';
         DOM.badgeIUnbal.className = 'voltage-badge badge-nema-normal';
       }
     }
 
     // Estimasi volume solar
     if (DOM.valFuelVolL) {
-      DOM.valFuelVolL.textContent = (data.fuel_vol_l !== null && data.fuel_vol_l !== undefined)
-        ? '(' + formatNum(data.fuel_vol_l, 1) + ' L)' : '';
+      const fvStr = formatNum(data.fuel_vol_l, 1);
+      DOM.valFuelVolL.textContent = (fvStr !== '--') ? '(' + fvStr + ' L)' : '';
     }
 
     // Evaluasi kondisi loop sensor standar NAMUR NE43
@@ -753,27 +756,27 @@
   function renderNemaVoltageBalance(balanceText, unbalancePct) {
     if (!DOM.badgeVoltageBalance || !DOM.textVoltageBalance) return;
 
-    if (unbalancePct === null || unbalancePct === undefined) {
+    if (unbalancePct === null || unbalancePct === undefined || isNaN(Number(unbalancePct))) {
       DOM.badgeVoltageBalance.className = 'voltage-badge';
       DOM.textVoltageBalance.textContent = 'TEGANGAN --';
       return;
     }
 
-    const pct = parseFloat(unbalancePct) || 0;
+    const pct = parseFloat(unbalancePct);
     const up = String(balanceText || '').toUpperCase();
 
-    let text = `TEGANGAN SEIMBANG (${pct.toFixed(1)}%)`;
+    let text = `TEGANGAN SEIMBANG (${formatNum(pct, 1)}%)`;
     let badgeClass = 'badge-nema-normal';
 
     if (up.includes('CRIT') || up.includes('FAULT') || pct > 3.0) {
       badgeClass = 'badge-nema-critical';
-      text = `TEGANGAN KRITIS (${pct.toFixed(1)}%)`;
+      text = `TEGANGAN KRITIS (${formatNum(pct, 1)}%)`;
     } else if (up.includes('WARN') || up.includes('MAJOR') || pct > 2.0) {
       badgeClass = 'badge-nema-warning';
-      text = `TEGANGAN ASIMETRIS (${pct.toFixed(1)}%)`;
+      text = `TEGANGAN ASIMETRIS (${formatNum(pct, 1)}%)`;
     } else {
       badgeClass = 'badge-nema-normal';
-      text = `TEGANGAN SEIMBANG (${pct.toFixed(1)}%)`;
+      text = `TEGANGAN SEIMBANG (${formatNum(pct, 1)}%)`;
     }
 
     DOM.badgeVoltageBalance.className = `voltage-badge ${badgeClass}`;
@@ -793,10 +796,10 @@
     const chart = state.chartInstance;
 
     chart.data.labels.push(timeLabel);
-    chart.data.datasets[0].data.push(data.engine_temp_c !== null && data.engine_temp_c !== undefined ? Number(data.engine_temp_c) : null);
-    chart.data.datasets[1].data.push(data.oil_press_bar !== null && data.oil_press_bar !== undefined ? Number(data.oil_press_bar) : null);
-    chart.data.datasets[2].data.push(data.load_pct !== null && data.load_pct !== undefined ? Number(data.load_pct) : null);
-    chart.data.datasets[3].data.push(data.v_l1 !== null && data.v_l1 !== undefined ? Number(data.v_l1) : null);
+    chart.data.datasets[0].data.push(data.engine_temp_c !== null && data.engine_temp_c !== undefined && !isNaN(Number(data.engine_temp_c)) ? Number(data.engine_temp_c) : null);
+    chart.data.datasets[1].data.push(data.oil_press_bar !== null && data.oil_press_bar !== undefined && !isNaN(Number(data.oil_press_bar)) ? Number(data.oil_press_bar) : null);
+    chart.data.datasets[2].data.push(data.load_pct !== null && data.load_pct !== undefined && !isNaN(Number(data.load_pct)) ? Number(data.load_pct) : null);
+    chart.data.datasets[3].data.push(data.v_l1 !== null && data.v_l1 !== undefined && !isNaN(Number(data.v_l1)) ? Number(data.v_l1) : null);
 
     if (chart.data.labels.length > MAX_POINTS) {
       chart.data.labels.shift();
@@ -1161,28 +1164,32 @@
 
     renderOdometerDigits(data.run_hours);
 
-    const hasDue = (data.maint_due_h !== null && data.maint_due_h !== undefined);
+    const hasDue = (data.maint_due_h !== null && data.maint_due_h !== undefined && !isNaN(Number(data.maint_due_h)));
     if (hasDue) {
       const dueHours = Number(data.maint_due_h);
-      DOM.valMaintDue.textContent = Math.max(0, dueHours).toFixed(1);
-      if (dueHours <= 0) {
-        DOM.textMaintRemaining.textContent = '0.0 Jam (Jatuh Tempo)';
-      } else {
-        DOM.textMaintRemaining.textContent = `Tersisa ${dueHours.toFixed(1)} Jam`;
+      if (DOM.valMaintDue) DOM.valMaintDue.textContent = Math.max(0, dueHours).toFixed(1);
+      if (DOM.textMaintRemaining) {
+        if (dueHours <= 0) {
+          DOM.textMaintRemaining.textContent = '0.0 Jam (Jatuh Tempo)';
+        } else {
+          DOM.textMaintRemaining.textContent = `Tersisa ${formatNum(dueHours, 1)} Jam`;
+        }
       }
       const percentDone = Math.max(0, Math.min(100, ((250 - dueHours) / 250) * 100));
-      DOM.barMaintProgress.style.width = percentDone.toFixed(1) + '%';
-      if (dueHours <= 0) {
-        DOM.barMaintProgress.style.background = 'var(--color-critical)';
-      } else if (dueHours <= 20.0) {
-        DOM.barMaintProgress.style.background = 'var(--color-major)';
-      } else {
-        DOM.barMaintProgress.style.background = 'linear-gradient(90deg, #059669, #3b82f6)';
+      if (DOM.barMaintProgress) {
+        DOM.barMaintProgress.style.width = formatNum(percentDone, 1) + '%';
+        if (dueHours <= 0) {
+          DOM.barMaintProgress.style.background = 'var(--color-critical)';
+        } else if (dueHours <= 20.0) {
+          DOM.barMaintProgress.style.background = 'var(--color-major)';
+        } else {
+          DOM.barMaintProgress.style.background = 'linear-gradient(90deg, #059669, #3b82f6)';
+        }
       }
     } else {
-      DOM.valMaintDue.textContent = '--';
-      DOM.textMaintRemaining.textContent = 'Menunggu Data Jam Kerja (NVS ESP32)';
-      DOM.barMaintProgress.style.width = '0%';
+      if (DOM.valMaintDue) DOM.valMaintDue.textContent = '--';
+      if (DOM.textMaintRemaining) DOM.textMaintRemaining.textContent = 'Menunggu Data Jam Kerja (NVS ESP32)';
+      if (DOM.barMaintProgress) DOM.barMaintProgress.style.width = '0%';
     }
 
     let rawStatus = data.maintenance_status ? String(data.maintenance_status).trim() : null;
@@ -1197,28 +1204,31 @@
       }
     }
 
-    if (rawStatus) {
-      const statusUpper = rawStatus.toUpperCase();
-      DOM.badgeMaintStatus.textContent = rawStatus;
-      if (statusUpper.includes('JATUH TEMPO') || statusUpper.includes('CRIT') || statusUpper.includes('KADALUARSA')) {
-        DOM.badgeMaintStatus.className = 'maint-status-badge badge-maint-critical';
-      } else if (statusUpper.includes('PERLU') || statusUpper.includes('SEGERA') || statusUpper.includes('WARN')) {
-        DOM.badgeMaintStatus.className = 'maint-status-badge badge-maint-warn';
+    if (DOM.badgeMaintStatus) {
+      if (rawStatus) {
+        const statusUpper = rawStatus.toUpperCase();
+        DOM.badgeMaintStatus.textContent = rawStatus;
+        if (statusUpper.includes('JATUH TEMPO') || statusUpper.includes('CRIT') || statusUpper.includes('KADALUARSA')) {
+          DOM.badgeMaintStatus.className = 'maint-status-badge badge-maint-critical';
+        } else if (statusUpper.includes('PERLU') || statusUpper.includes('SEGERA') || statusUpper.includes('WARN')) {
+          DOM.badgeMaintStatus.className = 'maint-status-badge badge-maint-warn';
+        } else {
+          DOM.badgeMaintStatus.className = 'maint-status-badge badge-maint-ok';
+        }
       } else {
-        DOM.badgeMaintStatus.className = 'maint-status-badge badge-maint-ok';
+        DOM.badgeMaintStatus.textContent = 'BELUM TERDATA';
+        DOM.badgeMaintStatus.className = 'maint-status-badge';
       }
-    } else {
-      DOM.badgeMaintStatus.textContent = 'BELUM TERDATA';
-      DOM.badgeMaintStatus.className = 'maint-status-badge';
     }
 
-    DOM.valFuelEst.textContent = (data.fuel_est_l !== null && data.fuel_est_l !== undefined)
-      ? Number(data.fuel_est_l).toFixed(1) : '--';
+    if (DOM.valFuelEst) {
+      DOM.valFuelEst.textContent = formatNum(data.fuel_est_l, 1);
+    }
   }
 
   function renderOdometerDigits(hours) {
     if (!DOM.odometerDigits) return;
-    if (hours === null || hours === undefined) {
+    if (hours === null || hours === undefined || isNaN(Number(hours))) {
       let html = '';
       for (let i = 0; i < 5; i++) {
         html += '<span class="odo-digit">-</span>';
@@ -1712,6 +1722,180 @@
     if (state.currentMode === MODES.OFFLINE) {
       executeTelemetryCycle();
     }
+  };
+
+  // ===========================================================================
+  // TEST HARNESS: UJI DEFENSIVE HANDLING (PENGUJIAN STRES 100%)
+  // Menguji Presentation Layer terhadap payload ekstrem firmware ESP32
+  // ===========================================================================
+  window.runDefensiveStressTest = function () {
+    console.group('%c[GMS DEFENSIVE TEST] Memulai Uji Defensive Handling (Target: 100%)', 'color: #2563eb; font-weight: bold; font-size: 13px;');
+    console.info('Menguji ketahanan Presentation Layer terhadap payload ekstrem firmware ESP32...');
+
+    const scenarios = [
+      {
+        name: 'Skenario 1: Cold Boot / Objek Kosong ({})',
+        desc: 'Firmware baru booting, belum ada satu pun parameter terkirim ke Mastify',
+        payload: {}
+      },
+      {
+        name: 'Skenario 2: Null Total (Seluruh parameter null)',
+        desc: 'Semua sensor & parameter elektrik bernilai null secara eksplisit',
+        payload: {
+          engine_state: null,
+          eng_speed_rpm: null,
+          oil_press_bar: null,
+          press_status: null,
+          coolant_temp_c: null,
+          engine_temp_c: null,
+          temp_status: null,
+          fuel_level_mm: null,
+          fuel_vol_l: null,
+          fuel_status: null,
+          batt_volt_v: null,
+          battery_v: null,
+          run_hours: null,
+          maint_due_h: null,
+          maintenance_status: null,
+          fuel_est_l: null,
+          v_l1: null,
+          v_l2: null,
+          v_l3: null,
+          v_unbal_pct: null,
+          voltage_balance: null,
+          i_l1: null,
+          i_l2: null,
+          i_l3: null,
+          i_unbal_pct: null,
+          p_kw: null,
+          s_kva: null,
+          pf: null,
+          freq_hz: null,
+          load_pct: null,
+          load_status: null,
+          ai1_st: null,
+          ai2_st: null,
+          ai3_st: null
+        }
+      },
+      {
+        name: 'Skenario 3: Sensor Analog Putus (NAMUR NE43 Fault)',
+        desc: 'Sensor analog PT100, 4-20mA, dan level lepas / 0 mA (kunci sensor absen)',
+        payload: {
+          engine_state: 'STOPPED',
+          battery_v: 24.5,
+          freq_hz: 0.0,
+          v_l1: 0.0, v_l2: 0.0, v_l3: 0.0,
+          p_kw: 0.0,
+          ai1_st: 'FAULT_LOW',
+          ai2_st: 'FAULT_LOW',
+          ai3_st: 'FAULT_LOW',
+          press_status: 'SENSOR_FAULT',
+          temp_status: 'SENSOR_FAULT',
+          fuel_status: 'SENSOR_FAULT'
+        }
+      },
+      {
+        name: 'Skenario 4: Power Meter RS-485 Timeout / Mati',
+        desc: 'Komunikasi Modbus mati, parameter V, I, P, S, Freq hilang (Real Hardware Mode)',
+        payload: {
+          engine_state: 'RUNNING',
+          engine_temp_c: 82.4,
+          oil_press_bar: 3.5,
+          fuel_level_mm: 850,
+          temp_status: 'NORMAL',
+          press_status: 'NORMAL',
+          fuel_status: 'NORMAL',
+          run_hours: 145.2,
+          maint_due_h: 104.8,
+          v_l1: null, v_l2: null, v_l3: null,
+          i_l1: null, i_l2: null, i_l3: null,
+          p_kw: null, s_kva: null, pf: null,
+          v_unbal_pct: null, i_unbal_pct: null,
+          load_pct: null, freq_hz: null
+        }
+      },
+      {
+        name: 'Skenario 5: Malformed Data Ekstrem (String acak, NaN, Tipe salah)',
+        desc: 'Data korup / salah tipe data dari server (bukan angka)',
+        payload: {
+          engine_state: 'UNKNOWN_RANDOM_STATE',
+          battery_v: 'invalid_volts',
+          freq_hz: NaN,
+          engine_temp_c: '999_invalid',
+          oil_press_bar: 'bad_pressure',
+          fuel_level_mm: undefined,
+          v_l1: 'abc', v_l2: NaN, v_l3: {},
+          v_unbal_pct: 'not_a_number',
+          i_unbal_pct: NaN,
+          p_kw: 'undefined',
+          run_hours: 'corrupted',
+          maint_due_h: NaN,
+          maintenance_status: 12345,
+          fuel_est_l: 'null_str'
+        }
+      },
+      {
+        name: 'Skenario 6: Payload Undefined / Null Langsung',
+        desc: 'Respons API gagal total atau timeout tanpa objek kembalian',
+        payload: null
+      }
+    ];
+
+    const results = [];
+    let passedCount = 0;
+
+    scenarios.forEach((sc, idx) => {
+      let passed = true;
+      let errorMsg = null;
+      try {
+        const dummyAlarms = [];
+        syncSensorStatusFromAlarms(sc.payload, dummyAlarms);
+        renderRealtimePanel(sc.payload || {});
+        renderMaintenancePanel(sc.payload || {});
+        pushTimeseriesPoint(sc.payload || {});
+        renderAlarmSystem(dummyAlarms, `Stress Test ${idx + 1}`);
+      } catch (err) {
+        passed = false;
+        errorMsg = err.message || String(err);
+      }
+
+      if (passed) {
+        passedCount++;
+        results.push({ Skenario: sc.name, Deskripsi: sc.desc, Status: 'PASSED (0 Error)' });
+      } else {
+        results.push({ Skenario: sc.name, Deskripsi: sc.desc, Status: `FAILED: ${errorMsg}` });
+      }
+    });
+
+    console.table(results);
+
+    const total = scenarios.length;
+    const isSuccess = (passedCount === total);
+    const scorePct = Math.round((passedCount / total) * 100);
+
+    if (isSuccess) {
+      console.log(`%c[HASIL AKHIR] KETAHANAN DEFENSIVE DASHBOARD: ${scorePct}% (LOLOS PENUH)`, 'color: #059669; font-weight: bold; font-size: 14px;');
+      console.info('Semua skenario ekstrem ditangani dengan aman: tidak ada TypeError, unhandled exception, atau freeze.');
+    } else {
+      console.error(`[HASIL AKHIR] Terdapat kegagalan (${passedCount}/${total} lolos). Skor: ${scorePct}%.`);
+    }
+
+    console.groupEnd();
+
+    // Pulihkan kembali siklus telemetri normal setelah 3 detik
+    setTimeout(() => {
+      console.info('[GMS Test] Memulihkan dashboard ke siklus telemetri normal...');
+      executeTelemetryCycle();
+    }, 3000);
+
+    return {
+      totalTests: total,
+      passed: passedCount,
+      failed: total - passedCount,
+      score: `${scorePct}%`,
+      status: isSuccess ? '100% DEFENSIVE READY' : 'DEFENSIVE AUDIT FAILED'
+    };
   };
 
   function setOperationMode(mode) {
